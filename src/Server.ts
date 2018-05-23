@@ -20,22 +20,22 @@ export default class Server {
   app: express.Express;
   im: InstanceManager;
 
-  constructor(port?: number) {
+  constructor(
+    port: number = 9000,
+    pathOrImage: string = "../arangodb",
+    runner: "local" | "docker" = "local",
+    storageEngine: "rocksdb" | "mmfiles" = "mmfiles"
+  ) {
     this.app = express();
-    this.im = new InstanceManager();
-    this.port = port || 9000;
+    this.im = new InstanceManager(pathOrImage, runner, storageEngine);
+    this.port = port;
 
     const router = express.Router();
     this.app.use(router);
 
-    router.get("/", (_req: Request, res: Response): any => {
-      res.send("Hello World");
-    });
-
     router.post(
       "/cluster",
       asyncMiddleware(async (req: Request, res: Response): Promise<any> => {
-        console.error("AAAAAAAAAAAAAH");
         const query = req.query;
         const options = req.body ? req.body.options : {};
         const endpoint = await this.im.startCluster(

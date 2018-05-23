@@ -1,4 +1,31 @@
 #!/usr/bin/env node
-const Server = require('../lib/Server');
-const server = new Server();
+const Server = require("../lib/Server");
+
+let port;
+if (process.env.INSTANCE_MANAGER_PORT) {
+  port = process.env.INSTANCE_MANAGER_PORT;
+} else {
+  port = 9000;
+}
+
+let pathOrImage;
+let runner;
+if (process.env.RESILIENCE_ARANGO_BASEPATH) {
+  pathOrImage = process.env.RESILIENCE_ARANGO_BASEPATH;
+  runner = "local";
+} else if (process.env.RESILIENCE_DOCKER_IMAGE) {
+  pathOrImage = process.env.RESILIENCE_DOCKER_IMAGE;
+  runner = "docker";
+}
+let storageEngine;
+if (process.env.ARANGO_STORAGE_ENGINE) {
+  storageEngine = process.env.ARANGO_STORAGE_ENGINE;
+  if (storageEngine !== "rocksdb") {
+    storageEngine = "mmfiles";
+  }
+} else {
+  storageEngine = "mmfiles";
+}
+
+const server = new Server(port, pathOrImage, runner, storageEngine);
 server.start();
