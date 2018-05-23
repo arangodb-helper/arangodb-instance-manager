@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-const Server = require("../lib/Server");
+const Server = require("../lib/Server").default;
 
 let port;
 if (process.env.INSTANCE_MANAGER_PORT) {
