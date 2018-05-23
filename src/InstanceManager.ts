@@ -59,12 +59,6 @@ export default class InstanceManager {
     }
 
     this.storageEngine = storageEngine;
-
-    if (!this.runner) {
-      throw new Error(
-        'Must specify RESILIENCE_ARANGO_BASEPATH (source root dir including a "build" folder containing compiled binaries or RESILIENCE_DOCKER_IMAGE to test a docker container'
-      );
-    }
     this.currentLog = "";
     this.agentCounter = 0;
     this.coordinatorCounter = 0;
