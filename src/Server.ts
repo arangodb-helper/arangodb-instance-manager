@@ -36,22 +36,25 @@ export default class Server {
     router.post(
       "/cluster",
       asyncMiddleware(async (req: Request, res: Response): Promise<any> => {
-        const query = req.query;
-        const options = req.body ? req.body.options : {};
+        const body = req.body ? req.body : {};
         const endpoint = await this.im.startCluster(
-          query.numAgents | 1,
-          query.numCoordinators | 3,
-          query.numDbServeres | 2,
-          options
+          body.numAgents | 1,
+          body.numCoordinators | 3,
+          body.numDbServeres | 2,
+          body.options | ({} as any)
         );
-        res.send(endpoint);
-        res.status(200);
+        res.send({ endpoint });
       })
     );
 
     router.delete("/", (_req: Request, res: Response): any => {
       this.im.cleanup();
-      res.status(200);
+      this.im = new InstanceManager(pathOrImage, runner, storageEngine);
+      res.send({});
+    });
+
+    router.get("/cluster/coordinators", (_req: Request, res: Response): any => {
+      res.send(this.im.coordinators().map(i => i.endpoint));
     });
   }
 
