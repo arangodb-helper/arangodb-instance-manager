@@ -1,3 +1,4 @@
+import _ = require("lodash");
 import express = require("express");
 import {
   NextFunction,
@@ -5,6 +6,7 @@ import {
   RequestHandler,
   Response
 } from "express-serve-static-core";
+import Instance from "./Instance.js";
 import InstanceManager from "./InstanceManager.js";
 
 const asyncMiddleware = (fn: RequestHandler): any => (
@@ -54,8 +56,36 @@ export default class Server {
     });
 
     router.get("/cluster/coordinators", (_req: Request, res: Response): any => {
-      res.send(this.im.coordinators().map(i => i.endpoint));
+      res.send(this.im.coordinators().map(i => _.omit(i, ["process"])));
     });
+
+    router.get("/instance/:name", (req: Request, res: Response): any => {
+      const name = req.params.name;
+      const instance = this.instance(name);
+      res.send(_.omit(instance, ["process"]));
+    });
+
+    router.delete(
+      "/instance/:name",
+      asyncMiddleware(async (req: Request, res: Response): Promise<any> => {
+        const name = req.params.name;
+        await this.im.shutdown(this.instance(name));
+        res.send({});
+      })
+    );
+
+    router.patch(
+      "/instance/:name",
+      asyncMiddleware(async (req: Request, res: Response): Promise<any> => {
+        const name = req.params.name;
+        await this.im.restart(this.instance(name));
+        res.send({});
+      })
+    );
+  }
+
+  private instance(name: String): Instance {
+    return this.im.instances.filter(i => i.name === name)[0];
   }
 
   start(): void {
