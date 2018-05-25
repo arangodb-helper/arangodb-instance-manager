@@ -405,7 +405,10 @@ export default class InstanceManager {
   }
 
   /// wait for leader selection (leader key is in agency)
-  async asyncReplicationLeaderSelected(ignore = null, timeoutSec = 25) {
+  async asyncReplicationLeaderSelected(
+    ignore = null,
+    timeoutSec = 25
+  ): Promise<string> {
     let i = timeoutSec * 10; // should be max 30s according to spec
     while (i-- > 0) {
       let val = await this.asyncReplicationLeaderId();
@@ -430,7 +433,7 @@ export default class InstanceManager {
 
   /// look into the agency and return the master instance
   /// assumes leader is in agency, does not try again
-  async asyncReplicationLeaderInstance() {
+  async asyncReplicationLeaderInstance(): Promise<Instance> {
     const uuid = await this.asyncReplicationLeaderId();
     if (uuid == null) {
       throw "leader is not in agency";
