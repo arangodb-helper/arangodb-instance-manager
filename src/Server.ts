@@ -40,10 +40,10 @@ export default class Server {
       asyncMiddleware(async (req: Request, res: Response): Promise<any> => {
         const body = req.body ? req.body : {};
         const endpoint = await this.im.startCluster(
-          body.numAgents | 1,
-          body.numCoordinators | 3,
-          body.numDbServeres | 2,
-          body.options | ({} as any)
+          body.numAgents || 1,
+          body.numCoordinators || 3,
+          body.numDbServeres || 2,
+          body.options || ({} as any)
         );
         res.send({ endpoint });
       })
@@ -55,15 +55,39 @@ export default class Server {
       res.send({});
     });
 
-    router.get("/cluster/coordinators", (_req: Request, res: Response): any => {
-      res.send(this.im.coordinators().map(i => _.omit(i, ["process"])));
+    router.get(
+      "/instance/coordinators",
+      (_req: Request, res: Response): any => {
+        res.send(this.forClient(this.im.coordinators()));
+      }
+    );
+
+    router.get("/instance/single", (_req: Request, res: Response): any => {
+      res.send(this.forClient(this.im.singleServers()));
     });
 
     router.get("/instance/:name", (req: Request, res: Response): any => {
       const name = req.params.name;
       const instance = this.instance(name);
-      res.send(_.omit(instance, ["process"]));
+      res.send(this.forClient([instance])[0]);
     });
+
+    router.head(
+      "/instance",
+      asyncMiddleware(async (_req: Request, res: Response): Promise<any> => {
+        await this.im.waitForAllInstances();
+        res.send({});
+      })
+    );
+
+    router.head(
+      "/instance/:name",
+      asyncMiddleware(async (req: Request, res: Response): Promise<any> => {
+        const name = req.params.name;
+        await this.im.waitForInstance(this.instance(name));
+        res.send({});
+      })
+    );
 
     router.delete(
       "/instance/:name",
@@ -82,10 +106,47 @@ export default class Server {
         res.send({});
       })
     );
+
+    router.post(
+      "/agency",
+      asyncMiddleware(async (_req: Request, res: Response): Promise<any> => {
+        const instances = await this.im.startAgency();
+        res.send(this.forClient(instances));
+      })
+    );
+
+    router.post(
+      "/single",
+      asyncMiddleware(async (req: Request, res: Response): Promise<any> => {
+        const num = req.query.num || undefined;
+        const instances = await this.im.startSingleServer("single", num);
+        res.send(this.forClient(instances));
+      })
+    );
+
+    router.get(
+      "/replication/leader",
+      asyncMiddleware(async (_req: Request, res: Response): Promise<any> => {
+        const instance = await this.im.asyncReplicationLeaderInstance();
+        res.send(this.forClient([instance])[0]);
+      })
+    );
+
+    router.head(
+      "/replication/leader",
+      asyncMiddleware(async (_req: Request, res: Response): Promise<any> => {
+        await this.im.asyncReplicationLeaderSelected();
+        res.send({});
+      })
+    );
   }
 
   private instance(name: String): Instance {
     return this.im.instances.filter(i => i.name === name)[0];
+  }
+
+  private forClient(instances: Instance[]): any[] {
+    return instances.map(i => _.omit(i, ["process"]));
   }
 
   start(): void {
