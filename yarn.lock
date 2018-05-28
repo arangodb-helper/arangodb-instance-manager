@@ -52,6 +52,14 @@
   dependencies:
     "@types/node" "*"
 
+"@types/glob@*":
+  version "5.0.35"
+  resolved "https://registry.yarnpkg.com/@types/glob/-/glob-5.0.35.tgz#1ae151c802cece940443b5ac246925c85189f32a"
+  dependencies:
+    "@types/events" "*"
+    "@types/minimatch" "*"
+    "@types/node" "*"
+
 "@types/ip@0.0.31":
   version "0.0.31"
   resolved "https://registry.yarnpkg.com/@types/ip/-/ip-0.0.31.tgz#a363989e72dd11bb21f932d6fe96bd6a85b2b74b"
@@ -65,6 +73,22 @@
 "@types/mime@*":
   version "2.0.0"
   resolved "https://registry.yarnpkg.com/@types/mime/-/mime-2.0.0.tgz#5a7306e367c539b9f6543499de8dd519fac37a8b"
+
+"@types/minimatch@*":
+  version "3.0.3"
+  resolved "https://registry.yarnpkg.com/@types/minimatch/-/minimatch-3.0.3.tgz#3dca0e3f33b200fc7d1139c0cd96c1268cadfd9d"
+
+"@types/mkdirp-promise@^5.0.0":
+  version "5.0.0"
+  resolved "https://registry.yarnpkg.com/@types/mkdirp-promise/-/mkdirp-promise-5.0.0.tgz#1a60377e189539fb9a26d988fd87a3e870837634"
+  dependencies:
+    "@types/mkdirp" "*"
+
+"@types/mkdirp@*":
+  version "0.5.2"
+  resolved "https://registry.yarnpkg.com/@types/mkdirp/-/mkdirp-0.5.2.tgz#503aacfe5cc2703d5484326b1b27efa67a339c1f"
+  dependencies:
+    "@types/node" "*"
 
 "@types/node@*":
   version "10.1.2"
@@ -85,6 +109,19 @@
     "@types/form-data" "*"
     "@types/node" "*"
     "@types/tough-cookie" "*"
+
+"@types/rimraf@*":
+  version "2.0.2"
+  resolved "https://registry.yarnpkg.com/@types/rimraf/-/rimraf-2.0.2.tgz#7f0fc3cf0ff0ad2a99bb723ae1764f30acaf8b6e"
+  dependencies:
+    "@types/glob" "*"
+    "@types/node" "*"
+
+"@types/rmfr@^2.0.0":
+  version "2.0.0"
+  resolved "https://registry.yarnpkg.com/@types/rmfr/-/rmfr-2.0.0.tgz#38236d832291c5c14a43f972d9aa8b25bf0f81f4"
+  dependencies:
+    "@types/rimraf" "*"
 
 "@types/serve-static@*":
   version "1.13.2"
