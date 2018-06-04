@@ -98,7 +98,7 @@ export default class Server {
       })
     );
 
-    router.patch(
+    router.post(
       "/instance/:name",
       asyncMiddleware(async (req: Request, res: Response): Promise<any> => {
         const name = req.params.name;
