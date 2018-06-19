@@ -37,23 +37,28 @@ export default class Server {
 
     router.post(
       "/cluster",
-      asyncMiddleware(async (req: Request, res: Response): Promise<any> => {
-        const body = req.body ? req.body : {};
-        const endpoint = await this.im.startCluster(
-          body.numAgents || 1,
-          body.numCoordinators || 3,
-          body.numDbServeres || 2,
-          body.options || ({} as any)
-        );
-        res.send({ endpoint });
-      })
+      asyncMiddleware(
+        async (req: Request, res: Response): Promise<any> => {
+          const body = req.body ? req.body : {};
+          const endpoint = await this.im.startCluster(
+            body.numAgents || 1,
+            body.numCoordinators || 3,
+            body.numDbServeres || 2,
+            body.options || ({} as any)
+          );
+          res.send({ endpoint });
+        }
+      )
     );
 
-    router.delete("/", (_req: Request, res: Response): any => {
-      this.im.cleanup();
-      this.im = new InstanceManager(pathOrImage, runner, storageEngine);
-      res.send({});
-    });
+    router.delete(
+      "/",
+      (_req: Request, res: Response): any => {
+        this.im.cleanup();
+        this.im = new InstanceManager(pathOrImage, runner, storageEngine);
+        res.send({});
+      }
+    );
 
     router.get(
       "/instance/coordinators",
@@ -62,82 +67,109 @@ export default class Server {
       }
     );
 
-    router.get("/instance/single", (_req: Request, res: Response): any => {
-      res.send(this.forClient(this.im.singleServers()));
-    });
+    router.get(
+      "/instance/single",
+      (_req: Request, res: Response): any => {
+        res.send(this.forClient(this.im.singleServers()));
+      }
+    );
 
-    router.get("/instance/:name", (req: Request, res: Response): any => {
-      const name = req.params.name;
-      const instance = this.instance(name);
-      res.send(this.forClient([instance])[0]);
-    });
+    router.get(
+      "/instance/:name",
+      (req: Request, res: Response): any => {
+        const name = req.params.name;
+        const instance = this.instance(name);
+        res.send(this.forClient([instance])[0]);
+      }
+    );
 
     router.head(
       "/instance",
-      asyncMiddleware(async (_req: Request, res: Response): Promise<any> => {
-        await this.im.waitForAllInstances();
-        res.send({});
-      })
+      asyncMiddleware(
+        async (_req: Request, res: Response): Promise<any> => {
+          await this.im.waitForAllInstances();
+          res.send({});
+        }
+      )
     );
 
     router.head(
       "/instance/:name",
-      asyncMiddleware(async (req: Request, res: Response): Promise<any> => {
-        const name = req.params.name;
-        await this.im.waitForInstance(this.instance(name));
-        res.send({});
-      })
+      asyncMiddleware(
+        async (req: Request, res: Response): Promise<any> => {
+          const name = req.params.name;
+          await this.im.waitForInstance(this.instance(name));
+          res.send({});
+        }
+      )
     );
 
     router.delete(
       "/instance/:name",
-      asyncMiddleware(async (req: Request, res: Response): Promise<any> => {
-        const name = req.params.name;
-        await this.im.shutdown(this.instance(name));
-        res.send({});
-      })
+      asyncMiddleware(
+        async (req: Request, res: Response): Promise<any> => {
+          const name = req.params.name;
+          const kill = req.query.kill || false;
+          if (kill) {
+            await this.im.kill(this.instance(name));
+          } else {
+            await this.im.shutdown(this.instance(name));
+          }
+          res.send({});
+        }
+      )
     );
 
     router.post(
       "/instance/:name",
-      asyncMiddleware(async (req: Request, res: Response): Promise<any> => {
-        const name = req.params.name;
-        await this.im.restart(this.instance(name));
-        res.send({});
-      })
+      asyncMiddleware(
+        async (req: Request, res: Response): Promise<any> => {
+          const name = req.params.name;
+          await this.im.restart(this.instance(name));
+          res.send({});
+        }
+      )
     );
 
     router.post(
       "/agency",
-      asyncMiddleware(async (_req: Request, res: Response): Promise<any> => {
-        const instances = await this.im.startAgency();
-        res.send(this.forClient(instances));
-      })
+      asyncMiddleware(
+        async (_req: Request, res: Response): Promise<any> => {
+          const instances = await this.im.startAgency();
+          res.send(this.forClient(instances));
+        }
+      )
     );
 
     router.post(
       "/single",
-      asyncMiddleware(async (req: Request, res: Response): Promise<any> => {
-        const num = req.query.num || undefined;
-        const instances = await this.im.startSingleServer("single", num);
-        res.send(this.forClient(instances));
-      })
+      asyncMiddleware(
+        async (req: Request, res: Response): Promise<any> => {
+          const num = req.query.num || undefined;
+          const instances = await this.im.startSingleServer("single", num);
+          res.send(this.forClient(instances));
+        }
+      )
     );
 
     router.get(
       "/replication/leader",
-      asyncMiddleware(async (_req: Request, res: Response): Promise<any> => {
-        const instance = await this.im.asyncReplicationLeaderInstance();
-        res.send(this.forClient([instance])[0]);
-      })
+      asyncMiddleware(
+        async (_req: Request, res: Response): Promise<any> => {
+          const instance = await this.im.asyncReplicationLeaderInstance();
+          res.send(this.forClient([instance])[0]);
+        }
+      )
     );
 
     router.head(
       "/replication/leader",
-      asyncMiddleware(async (_req: Request, res: Response): Promise<any> => {
-        await this.im.asyncReplicationLeaderSelected();
-        res.send({});
-      })
+      asyncMiddleware(
+        async (_req: Request, res: Response): Promise<any> => {
+          await this.im.asyncReplicationLeaderSelected();
+          res.send({});
+        }
+      )
     );
   }
 
