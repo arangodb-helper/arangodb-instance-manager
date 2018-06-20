@@ -163,12 +163,23 @@ export default class Server {
       )
       .head(
         asyncMiddleware(
-          async (_req: Request, res: Response): Promise<any> => {
-            await this.im.asyncReplicationLeaderSelected();
+          async (req: Request, res: Response): Promise<any> => {
+            const ignore = req.query.ignore || undefined;
+            await this.im.asyncReplicationLeaderSelected(ignore);
             res.send({});
           }
         )
       );
+
+    router.get(
+      "/replication/leader/id",
+      asyncMiddleware(
+        async (_req: Request, res: Response): Promise<any> => {
+          const uuid = await this.im.asyncReplicationLeaderId();
+          res.send({ uuid });
+        }
+      )
+    );
   }
 
   private instance(name: String): Instance {
