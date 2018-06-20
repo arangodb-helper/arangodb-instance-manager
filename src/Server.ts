@@ -74,15 +74,6 @@ export default class Server {
       }
     );
 
-    router.get(
-      "/instance/:name",
-      (req: Request, res: Response): any => {
-        const name = req.params.name;
-        const instance = this.instance(name);
-        res.send(this.forClient([instance])[0]);
-      }
-    );
-
     router.head(
       "/instance",
       asyncMiddleware(
@@ -93,16 +84,24 @@ export default class Server {
       )
     );
 
-    router.head(
-      "/instance/:name",
-      asyncMiddleware(
-        async (req: Request, res: Response): Promise<any> => {
+    router
+      .route("/instance/:name")
+      .get(
+        (req: Request, res: Response): any => {
           const name = req.params.name;
-          await this.im.waitForInstance(this.instance(name));
-          res.send({});
+          const instance = this.instance(name);
+          res.send(this.forClient([instance])[0]);
         }
       )
-    );
+      .head(
+        asyncMiddleware(
+          async (req: Request, res: Response): Promise<any> => {
+            const name = req.params.name;
+            await this.im.waitForInstance(this.instance(name));
+            res.send({});
+          }
+        )
+      );
 
     router.delete(
       "/instance/:name",
@@ -152,25 +151,24 @@ export default class Server {
       )
     );
 
-    router.get(
-      "/replication/leader",
-      asyncMiddleware(
-        async (_req: Request, res: Response): Promise<any> => {
-          const instance = await this.im.asyncReplicationLeaderInstance();
-          res.send(this.forClient([instance])[0]);
-        }
+    router
+      .route("/replication/leader")
+      .get(
+        asyncMiddleware(
+          async (_req: Request, res: Response): Promise<any> => {
+            const instance = await this.im.asyncReplicationLeaderInstance();
+            res.send(this.forClient([instance])[0]);
+          }
+        )
       )
-    );
-
-    router.head(
-      "/replication/leader",
-      asyncMiddleware(
-        async (_req: Request, res: Response): Promise<any> => {
-          await this.im.asyncReplicationLeaderSelected();
-          res.send({});
-        }
-      )
-    );
+      .head(
+        asyncMiddleware(
+          async (_req: Request, res: Response): Promise<any> => {
+            await this.im.asyncReplicationLeaderSelected();
+            res.send({});
+          }
+        )
+      );
   }
 
   private instance(name: String): Instance {
