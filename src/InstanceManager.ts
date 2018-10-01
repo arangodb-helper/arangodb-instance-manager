@@ -362,7 +362,7 @@ export default class InstanceManager {
         body: [["/"]]
       });
       console.error(JSON.stringify(body));
-    } catch (e) {}
+    } catch (e) { }
   }
 
   /// Lookup the async failover leader in agency
@@ -397,7 +397,7 @@ export default class InstanceManager {
     if (servers.length !== singles.length) {
       throw new Error(
         `AsyncReplication: Requested ${singles.length}, but ${
-          servers.length
+        servers.length
         } ready`
       );
     }
@@ -486,7 +486,7 @@ export default class InstanceManager {
           !result.state.running ||
           result.endpoint !== leader.endpoint ||
           compareTicks(result.state.lastProcessedContinuousTick, leaderTick) ==
-            -1
+          -1
       );
       if (unfinished.length == 0) {
         return true;
@@ -504,17 +504,18 @@ export default class InstanceManager {
     endpoint: string,
     timoutSecs: number = 45.0
   ): Promise<true> {
-    let db = arangojs({
-      url: endpointToUrl(endpoint)
-    });
-
+    let url = endpointToUrl(endpoint);
     let i = Math.ceil(timoutSecs * 2);
     while (i-- > 0) {
       try {
-        // should throw if server is unvalailable
-        await db.query("FOR x IN [1,2] RETURN x");
-        return true; // worked
-      } catch (ignored) {}
+        let res = await rp.get({
+          json: true,
+          uri: `${url}/_admin/server/availability`
+        });
+        if (res.code === 200) {
+          return true; // worked
+        }
+      } catch (ignored) { }
       await sleep(500); // 0.5s
     }
     console.error("Leader did not figure out leadership in time");
@@ -623,7 +624,7 @@ export default class InstanceManager {
       if (Date.now() - started > WAIT_TIMEOUT * 1000) {
         throw new Error(
           `Instance ${
-            instance.name
+          instance.name
           } is still not ready after ${WAIT_TIMEOUT} secs`
         );
       }
@@ -633,7 +634,7 @@ export default class InstanceManager {
           uri: endpointToUrl(instance.endpoint) + "/_api/version"
         });
         return instance;
-      } catch (e) {}
+      } catch (e) { }
       // Wait 100 ms and try again
       await sleep(100);
     }
@@ -906,11 +907,11 @@ export default class InstanceManager {
         if (errObj.code === "ECONNREFUSED") {
           console.warn(
             "hmmm...server " +
-              instance.name +
-              " did not respond (" +
-              JSON.stringify(errObj) +
-              "). Assuming it is dead. Status is: " +
-              instance.status
+            instance.name +
+            " did not respond (" +
+            JSON.stringify(errObj) +
+            "). Assuming it is dead. Status is: " +
+            instance.status
           );
           expected = true;
         } else if (errObj.code === "ECONNRESET") {
@@ -918,9 +919,9 @@ export default class InstanceManager {
         } else if (err.statusCode === 503) {
           console.warn(
             "server " +
-              instance.name +
-              " answered 503. Assuming it is shutting down. Status is: " +
-              instance.status
+            instance.name +
+            " answered 503. Assuming it is shutting down. Status is: " +
+            instance.status
           );
           expected = true;
         } else if (errObj.errorNum === ERROR_SHUTTING_DOWN) {
