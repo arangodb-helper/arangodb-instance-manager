@@ -1,6 +1,5 @@
 "use strict";
 import _ = require("lodash");
-import arangojs from "arangojs";
 import { UriOptions, UrlOptions } from "request";
 import DockerRunner from "./DockerRunner";
 import { FailoverError } from "./Errors";
@@ -32,6 +31,24 @@ const shutdownGiveUpAfterSeconds = 200;
 const shutdownWaitInterval = 50;
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+// TODO this has more
+interface Health {
+    Endpoint: string;
+}
+
+function isHealth(x: any): x is Health {
+    return x.hasOwnProperty("Endpoint") && typeof x.Endpoint === "string";
+}
+
+function toHealth(x: any): Health {
+    if(isHealth(x)) {
+        return x;
+    }
+    else {
+        throw new TypeError(`Not a Health object: ${x}`);
+    }
+}
 
 export default class InstanceManager {
   singleServerCounter: number;
@@ -163,6 +180,7 @@ export default class InstanceManager {
     args: string[]
   ): Promise<Instance> {
     args.push("--server.authentication=false");
+    args.push("--log.use-microtime=true");
     //args.push('--log.level=v8=debug')
 
     if (process.env.LOG_COMMUNICATION && process.env.LOG_COMMUNICATION !== "") {
@@ -175,6 +193,10 @@ export default class InstanceManager {
 
     if (process.env.LOG_AGENCY && process.env.LOG_AGENCY !== "") {
       args.push(`--log.level=agency=${process.env.LOG_AGENCY}`);
+    }
+
+    if (process.env.LOG_REPLICATION && process.env.LOG_REPLICATION !== "") {
+      args.push(`--log.level=replication=${process.env.LOG_REPLICATION}`);
     }
 
     args.push(`--server.storage-engine=${this.storageEngine}`);
@@ -253,7 +275,6 @@ export default class InstanceManager {
       "--cluster.agency-endpoint=" + this.getAgencyEndpoint(),
       "--cluster.my-role=COORDINATOR",
       "--cluster.my-address=" + endpoint,
-      "--log.level=requests=trace"
     ];
     const instance = await this.startArango(
       name,
@@ -265,7 +286,7 @@ export default class InstanceManager {
     return instance;
   }
 
-  async replace(instance: Instance): Promise<Instance> {
+  async replace(instance: Instance, withNewEndpoint = false): Promise<Instance> {
     let name, role;
     switch (instance.role) {
       case "coordinator":
@@ -289,6 +310,9 @@ export default class InstanceManager {
       "--cluster.my-role=" + role,
       "--cluster.my-address=" + instance.endpoint
     ];
+    if (withNewEndpoint) {
+      await this.assignNewEndpoint(instance);
+    }
     instance = await this.startArango(
       name,
       instance.endpoint,
@@ -328,7 +352,6 @@ export default class InstanceManager {
         "--agency.pool-size=" + size,
         "--agency.wait-for-sync=true",
         "--agency.supervision=true",
-        "--server.threads=16",
         "--agency.supervision-frequency=0.5",
         "--agency.supervision-grace-period=2.5",
         "--agency.compaction-step-size=" + compactionStep,
@@ -604,6 +627,8 @@ export default class InstanceManager {
 
     debugLog("waiting for /_api/version to succeed an all servers");
     await this.waitForAllInstances();
+    debugLog("adding server IDs to all instances");
+    await this.addIdsToAllInstances();
     debugLog("Cluster is up and running");
 
     return this.getEndpoint();
@@ -707,6 +732,45 @@ export default class InstanceManager {
       results.push(await waiter);
     }
     return results;
+  }
+
+  private async addIdsToAllInstances(): Promise<void> {
+    // TODO add timeout
+    while(true) {
+      let coordinator = this
+        .coordinators()
+        .filter(server => server.status == "RUNNING")[0];
+      const res = await rp({
+        url: this.getEndpointUrl(coordinator) + "/_admin/cluster/health",
+        json: true,
+      });
+      const healthEntries = Object.entries(res.Health);
+
+      const endpointToId = new Map<string, string>(
+        healthEntries.map<[string, string]>(
+          ([id, infos]) => [toHealth(infos).Endpoint, id]
+        )
+      );
+
+      this.instances
+      // skip instances which already got ids
+        .filter(instance => !instance.hasOwnProperty('id'))
+        .forEach(instance => {
+          const endpoint = this.getEndpoint(instance);
+          // set id if we could find it
+          if (endpointToId.has(endpoint)) {
+            instance.id = endpointToId.get(endpoint);
+          } else {
+            debugLog(`Endpoint ${endpoint} not found in health struct.`);
+          }
+        });
+
+      if (this.instances.every(inst => inst.hasOwnProperty('id'))) {
+        break;
+      }
+
+      await sleep(100); // 100ms
+    }
   }
 
   private getEndpoint(instance?: Instance): string {
@@ -902,8 +966,24 @@ export default class InstanceManager {
       let expected = false;
       if (err && (err.statusCode === 503 || err.error)) {
         // Some "errors" are expected.
-        let errObj =
-          typeof err.error === "string" ? JSON.parse(err.error) : err.error;
+        let errObj;
+        if (typeof err.error === "string") {
+          // The 503 errors during shutdown have err.error === "".
+          if (err.error !== "") {
+            try {
+              errObj = JSON.parse(err.error);
+            }
+            catch (e) {
+              console.error(e, ` while parsing: ${err.error}`);
+              throw e;
+            }
+          }
+          else {
+            errObj = {};
+          }
+        } else {
+          errObj = err.error;
+        }
         if (errObj.code === "ECONNREFUSED") {
           console.warn(
             "hmmm...server " +
@@ -973,32 +1053,14 @@ export default class InstanceManager {
     this.currentLog = "";
   }
 
-  private async getFoxxmaster(): Promise<Instance | undefined> {
-    const baseUrl = endpointToUrl(this.getAgencyEndpoint());
-    const [info] = await this.rpAgency({
-      method: "POST",
-      uri: baseUrl + "/_api/agency/read",
-      json: true,
-      body: [
-        ["/arango/Current/Foxxmaster", "/arango/Current/ServersRegistered"]
-      ]
-    });
-    const uuid = info.arango.Current.Foxxmaster;
-    const endpoint = info.arango.Current.ServersRegistered[uuid].endpoint;
-    return this.instances.find(instance => instance.endpoint === endpoint);
-  }
-
   async restartCluster(): Promise<void> {
-    const fm = (await this.getFoxxmaster())!;
     await this.shutdownCluster();
     await Promise.all(this.agents().map(agent => this.restart(agent)));
     await sleep(2000);
     await Promise.all(this.dbServers().map(dbs => this.restart(dbs)));
-    this.restart(fm);
     await sleep(2000);
     await Promise.all(
       this.coordinators()
-        .filter(coord => coord !== fm)
         .map(coord => this.restart(coord))
     );
     await this.waitForAllInstances();

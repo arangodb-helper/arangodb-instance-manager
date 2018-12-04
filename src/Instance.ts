@@ -12,4 +12,5 @@ export default interface Instance {
   process: ChildProcess | null;
   logFn: (line: string) => void;
   role: string;
+  id?: string;
 }
