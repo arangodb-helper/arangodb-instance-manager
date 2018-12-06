@@ -24,15 +24,12 @@ const debugLog = (...logLine: any[]) => {
 // 180s, after this time we kill -9 the instance
 const shutdownKillAfterSeconds = 180;
 
-// 200s, note that the cluster internally has a 120s timeout
-const shutdownGiveUpAfterSeconds = 200;
-
 // We check every 50ms if a server is down
 const shutdownWaitInterval = 50;
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-// TODO this has more
+// TODO this has more properties
 interface Health {
     Endpoint: string;
 }
@@ -789,22 +786,40 @@ export default class InstanceManager {
 
   async shutdownCluster(): Promise<void> {
     debugLog(`Shutting down the cluster`);
-    const nonAgents = [
-      ...this.coordinators(),
-      ...this.dbServers(),
-      ...this.singleServers()
+    // Shutdown order
+    const orderedInstances = [
+        ...this.coordinators(),
+        ...this.dbServers(),
+        ...this.singleServers(),
+        ...this.agents()
     ];
 
-    for (let waiter of nonAgents.map(n => this.shutdown(n))) {
-      await waiter;
+    const errors: Error[] = [];
+    for (let waiter of orderedInstances.map(n => this.shutdown(n))) {
+      try {
+          await waiter;
+      }
+      catch (e) {
+        errors.push(e);
+      }
     }
-    for (let waiter of this.agents().map(a => this.shutdown(a))) {
-      await waiter;
+
+    if (errors.length > 0) {
+      throw new Error(
+        `Caught ${errors.length} error(s) during shutdownCluster:\n`
+        + errors.map(e => e.toString()).join("\n")
+      );
     }
   }
 
   async cleanup(retainDir: boolean = false): Promise<string> {
-    await this.shutdownCluster();
+    try {
+        await this.shutdownCluster();
+    } catch (e) {
+      debugLog(`cleanup: Error during shutdownCluster:`);
+      debugLog(e);
+      retainDir = true;
+    }
     this.instances = [];
     this.agentCounter = 0;
     this.coordinatorCounter = 0;
@@ -848,11 +863,6 @@ export default class InstanceManager {
   }
 
   async assignNewEndpoint(instance: Instance): Promise<void> {
-    const instanceIndex = this.instances.indexOf(instance);
-    if (instanceIndex === -1) {
-      throw new Error("Couldn't find instance " + instance.name);
-    }
-
     let endpoint: string;
     do {
       endpoint = await this.runner.createEndpoint();
@@ -916,7 +926,7 @@ export default class InstanceManager {
   }
 
   // Internal function do not call from outside
-  private async checkDown(instance: Instance): Promise<Instance> {
+  private static async checkDown(instance: Instance): Promise<Instance> {
     debugLog(`Test if ${instance.name} is down`);
     // let attempts = 0;
     const start = Date.now();
@@ -926,22 +936,16 @@ export default class InstanceManager {
       const duration = (Date.now() - start) / 1000;
 
       if (duration >= shutdownKillAfterSeconds && !sigkillSent) {
-        debugLog(`Sending SIGKILL to ${instance.name}`);
+        // debugLog(`Sending SIGKILL to ${instance.name}`);
         if (!instance.process) {
           throw new Error(
             `Could not find process of instance ${instance.name}`
           );
         }
-        instance.process.kill("SIGKILL");
+        console.warn(`Sending SIGABRT to ${instance.name}, pid=${instance.process.pid}`);
+        instance.process.kill("SIGABRT");
         instance.status = "KILLED";
-      }
-
-      if (duration >= shutdownGiveUpAfterSeconds) {
-        // Sorry we give up, could neither terminate instance with Shutdown nor with SIGKILL
-        debugLog(`Failed to shutdown and kill ${instance.name}. Aborting.`);
-        throw new Error(
-          `${instance.name} did not stop gracefully after ${duration}s`
-        );
+        throw new Error(`Reached shutdown timeout, logfile is ${instance.logFile}`);
       }
 
       // wait a while and try again.
@@ -1021,12 +1025,16 @@ export default class InstanceManager {
         throw err;
       }
     }
-    return this.checkDown(instance);
+    return await InstanceManager.checkDown(instance);
   }
 
   async destroy(instance: Instance): Promise<void> {
     if (this.instances.includes(instance)) {
-      await this.shutdown(instance);
+      try {
+          await this.shutdown(instance);
+      } catch(e) {
+        debugLog(`destroy(${instance.name}): shutdown failed with ${e}`);
+      }
     }
     await this.runner.destroy(instance);
     const idx = this.instances.indexOf(instance);
