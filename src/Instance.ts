@@ -1,4 +1,5 @@
 import { ChildProcess } from "child_process";
+import VersionResponse from "./VersionResponse";
 
 export default interface Instance {
   name: string;
@@ -13,4 +14,5 @@ export default interface Instance {
   logFn: (line: string) => void;
   role: string;
   id?: string;
+  version?: VersionResponse;
 }
