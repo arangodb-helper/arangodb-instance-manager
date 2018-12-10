@@ -896,7 +896,6 @@ export default class InstanceManager {
   }
 
   async cleanup(retainDir: boolean = false): Promise<string> {
-    let startTime = Date.now();
     try {
         await this.shutdownCluster();
     } catch (e) {
@@ -904,7 +903,6 @@ export default class InstanceManager {
       debugLog(e);
       retainDir = true;
     }
-    console.log(`cleanup: shutdownCluster took ${Date.now() - startTime}ms`);
     this.instances = [];
     this.agentCounter = 0;
     this.coordinatorCounter = 0;
@@ -1152,9 +1150,7 @@ export default class InstanceManager {
   async restartCluster(): Promise<void> {
     await this.shutdownCluster();
     await Promise.all(this.agents().map(agent => this.restart(agent)));
-    await sleep(2000);
     await Promise.all(this.dbServers().map(dbs => this.restart(dbs)));
-    await sleep(2000);
     await Promise.all(
       this.coordinators()
         .map(coord => this.restart(coord))
