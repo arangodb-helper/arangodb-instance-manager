@@ -1019,14 +1019,13 @@ export default class InstanceManager {
       const duration = (Date.now() - start) / 1000;
 
       if (duration >= shutdownKillAfterSeconds && !sigkillSent) {
-        // debugLog(`Sending SIGKILL to ${instance.name}`);
         if (!instance.process) {
           throw new Error(
             `Could not find process of instance ${instance.name}`
           );
         }
         // Send SIGABRT to produce a core dump.
-        console.warn(`Sending SIGABRT to ${instance.name}, pid=${instance.process.pid}`);
+        console.warn(`Sending SIGABRT to ${instance.name} due to timeout. PID is ${instance.process.pid}.`);
         instance.process.kill("SIGABRT");
         instance.status = "KILLED";
         throw new Error(`Reached shutdown timeout, logfile is ${instance.logFile}`);
