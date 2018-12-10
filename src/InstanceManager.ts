@@ -783,8 +783,11 @@ export default class InstanceManager {
   }
 
   private async addIdsToAllInstances(): Promise<void> {
-    // TODO add timeout
-    while(true) {
+    for (
+      const start = Date.now();
+      Date.now() - start < 50e3;
+      await sleep(100)
+    ) {
       let coordinator = this.getCoordinator();
       const res = await rp({
         url: this.getEndpointUrl(coordinator) + "/_admin/cluster/health",
@@ -814,8 +817,6 @@ export default class InstanceManager {
       if (this.instances.every(inst => inst.hasOwnProperty('id'))) {
         break;
       }
-
-      await sleep(100); // 100ms
     }
   }
 
@@ -1026,6 +1027,7 @@ export default class InstanceManager {
             `Could not find process of instance ${instance.name}`
           );
         }
+        // Send SIGABRT to produce a core dump.
         console.warn(`Sending SIGABRT to ${instance.name}, pid=${instance.process.pid}`);
         instance.process.kill("SIGABRT");
         instance.status = "KILLED";
@@ -1117,7 +1119,9 @@ export default class InstanceManager {
       try {
         await this.shutdown(instance);
       } catch(e) {
-        debugLog(`destroy(${instance.name}): shutdown failed with ${e}`);
+        debugLog(`destroy(${instance.name}): shutdown failed with ${e}.`);
+        // Abort destroy when shutdown fails
+        throw e;
       }
     }
     await this.runner.destroy(instance);
