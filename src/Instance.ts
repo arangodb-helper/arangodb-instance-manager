@@ -1,6 +1,9 @@
 import { ChildProcess } from "child_process";
 import VersionResponse from "./VersionResponse";
 
+export type Role = "agent" | "primary" | "coordinator" | "single";
+export type Status = "NEW" | "RUNNING" | "STOPPED" | "EXITED" | "KILLED";
+
 export default interface Instance {
   name: string;
   logFile?: string;
@@ -8,11 +11,11 @@ export default interface Instance {
   binary?: string;
   args: string[];
   port?: string;
-  status: string;
+  status: Status;
   exitcode: number | null;
   process: ChildProcess | null;
   logFn: (line: string) => void;
-  role: string;
+  role: Role;
   id?: string;
   version?: VersionResponse;
 }

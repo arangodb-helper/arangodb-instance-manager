@@ -5,7 +5,7 @@ import rp = require("request-promise-native");
 import {UriOptions} from "request";
 import DockerRunner from "./DockerRunner";
 import {FailoverError} from "./Errors";
-import Instance from "./Instance";
+import Instance, { Role, Status } from "./Instance";
 import LocalRunner from "./LocalRunner";
 import Runner from "./Runner";
 import {compareTicks, endpointToUrl} from "./common";
@@ -106,7 +106,7 @@ export default class InstanceManager {
   private startArango(
     name: string,
     endpoint: string,
-    role: string,
+    role: Role,
     args: string[]
   ): Promise<Instance> {
     args.push("--server.authentication=false");
@@ -984,7 +984,8 @@ export default class InstanceManager {
 
     instance.process!.kill("SIGKILL");
     instance.status = "KILLED";
-    while (instance.status !== "EXITED") {
+    // Need to convince TypeScript that status does not stay "KILLED" here.
+    while ((<Status>instance.status) !== "EXITED") {
       await sleep(50);
     }
   }
