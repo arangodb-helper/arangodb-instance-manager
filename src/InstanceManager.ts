@@ -788,7 +788,7 @@ export default class InstanceManager {
       Date.now() - start < 50e3;
       await sleep(100)
     ) {
-      let coordinator = this.getCoordinator();
+      const coordinator = this.getCoordinator();
       const res = await rp({
         url: this.getEndpointUrl(coordinator) + "/_admin/cluster/health",
         json: true,
@@ -831,18 +831,47 @@ export default class InstanceManager {
     return runningCoords[0];
   }
 
+  private getSingle() : Instance {
+    const runningSingles = this
+      .singleServers()
+      .filter(server => server.status == "RUNNING");
+    if (runningSingles.length === 0) {
+      throw new Error('No single server is running');
+    }
+
+    return runningSingles[0];
+  }
+
   private getEndpoint(instance?: Instance): string {
     return (instance || this.coordinators()[0]).endpoint;
   }
 
   // We assume all processes are started with the same binary. So just take any.
   private getArangoVersion(): Version {
-    const coord = this.getCoordinator();
-    if (coord.version === undefined) {
+    const clusterInstances = [
+      ...this.agents(),
+      ...this.dbServers(),
+      ...this.coordinators(),
+    ];
+    const singleServers = this.singleServers();
+    const hasSingle = singleServers.length > 0;
+    const hasCluster = clusterInstances.length > 0;
+    if (!hasSingle && !hasCluster) {
+      throw Error('No instances!');
+    }
+    if (hasSingle && hasCluster) {
+      throw Error('Both cluster and single server instances running. '
+      + 'Expecting one or the other here. If you need both, fix it.');
+    }
+
+    const inst = hasCluster ? this.getCoordinator() : this.getSingle();
+
+    if (inst.version === undefined) {
       throw new Error('Expected a running instance to have its version set. '
       + 'Did someone forget to call waitForInstance() on it?');
     }
-    return coord.version.version;
+
+    return inst.version.version;
   }
 
   getEndpointUrl(instance: Instance): string {
