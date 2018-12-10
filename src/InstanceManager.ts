@@ -1,7 +1,7 @@
 "use strict";
 import _ = require("lodash");
 import dd = require("dedent");
-import rp = require("request-promise");
+import rp = require("request-promise-native");
 import {UriOptions} from "request";
 import DockerRunner from "./DockerRunner";
 import {FailoverError} from "./Errors";
