@@ -2,13 +2,13 @@
 import _ = require("lodash");
 import dd = require("dedent");
 import rp = require("request-promise-native");
-import {UriOptions} from "request";
+import { UriOptions } from "request";
 import DockerRunner from "./DockerRunner";
-import {FailoverError} from "./Errors";
+import { FailoverError } from "./Errors";
 import Instance, { Role, Status } from "./Instance";
 import LocalRunner from "./LocalRunner";
 import Runner from "./Runner";
-import {compareTicks, endpointToUrl} from "./common";
+import { compareTicks, endpointToUrl } from "./common";
 import VersionResponse, { Version } from "./VersionResponse";
 
 // Arango error code for "shutdown in progress"
@@ -639,17 +639,20 @@ export default class InstanceManager {
     const allInSync = function (
       current: { [key:string]: { [key:string]: { servers: Array<string> } } },
       expectedDistribution: Map<string, Map<string, Array<string>>>,
-      colIdToName: Map<string, string>
+      colIdToName: Map<string, string>,
+      lastError: { error?: string }
     ) {
       for (const [collectionId, shards] of expectedDistribution) {
       const collection = colIdToName.get(collectionId);
         for (const [shard, servers] of shards) {
           if (!current[collectionId]) {
             debugLog(`Collection not yet in Current: ${collection}`);
+            lastError.error = `Collection not yet in Current: ${collection}`;
             return false;
           }
           if (!current[collectionId][shard]) {
             debugLog(`Shard not yet in Current: ${collection}/${shard}`);
+            lastError.error = `Shard not yet in Current: ${collection}/${shard}`;
             return false;
           }
           if (!_.isEqual(current[collectionId][shard].servers, servers)) {
@@ -657,6 +660,9 @@ export default class InstanceManager {
               + `Expected: ${servers}, `
               + `actual: ${current[collectionId][shard].servers}`
             );
+            lastError.error = `Not in sync: ${collection}/${shard}. `
+              + `Expected: ${servers}, `
+              + `actual: ${current[collectionId][shard].servers}`;
             return false;
           }
         }
@@ -667,7 +673,7 @@ export default class InstanceManager {
       return true;
     };
 
-    const allSystemCollectionsInPlan = function (plan: Object) {
+    const allSystemCollectionsInPlan = function (plan: Object, lastError: {error?: string}) {
       const planCollections = new Set(
         Object.values(plan).map(colInfo => colInfo.name)
       );
@@ -675,6 +681,7 @@ export default class InstanceManager {
       for (const collection of systemCollections) {
         if (!planCollections.has(collection)) {
           debugLog(`collection ${collection} still missing from Plan`);
+          lastError.error = `collection ${collection} still missing from Plan`;
           return false;
         }
       }
@@ -717,6 +724,10 @@ export default class InstanceManager {
       );
     };
 
+    const lastError : {error?: string} = {
+      error: undefined,
+    };
+
     // We wait at most 50s for everything to get in sync
     for (
       const start = Date.now();
@@ -724,11 +735,15 @@ export default class InstanceManager {
       await sleep(100)
     ) {
       debugLog(`Checking if everything is in sync...`);
+      const agencyQuery =
+        [["/arango/Plan/Collections/_system",
+          "/arango/Current/Collections/_system",
+        ]];
       const [info] = await InstanceManager.rpAgency({
         method: "POST",
         uri: baseUrl + "/_api/agency/read",
         json: true,
-        body: [["/arango/Plan/Collections/_system", "/arango/Current/Collections/_system"]]
+        body: agencyQuery,
       });
 
       if (
@@ -743,7 +758,7 @@ export default class InstanceManager {
         const current = info.arango.Current.Collections._system;
         const plan = info.arango.Plan.Collections._system;
 
-        if (allSystemCollectionsInPlan(plan)) {
+        if (allSystemCollectionsInPlan(plan, lastError)) {
           // The outer Map's keys are collection IDs,
           // the inner Map's keys are shards,
           // the inner Map's values are lists of DBServer IDs.
@@ -752,22 +767,102 @@ export default class InstanceManager {
 
           const colIdToName = colIdToNameFromPlan(plan);
 
-          if (allInSync(current, expectedDistribution, colIdToName)) {
+          if (allInSync(current, expectedDistribution, colIdToName, lastError)) {
             // Everything's fine
             return;
           }
         }
       } else {
+
+        lastError.error = "Got unexpected result from AgencyPlan: "
+          + JSON.stringify(info)
+          + " as result of the query " + JSON.stringify(agencyQuery);
         debugLog("Got unexpected result from AgencyPlan:", info);
       }
     }
 
-    throw new Error(`Plan and Current didn't come in sync after 50s`);
+    let agencyDump, exception;
+    try {
+      agencyDump = await InstanceManager.rpAgency({
+        method: "POST",
+        uri: baseUrl + "/_api/agency/read",
+        json: true,
+        body: [["/"]],
+      });
+    } catch(e) { exception = e;}
+
+
+    let message = `Plan and Current didn't come in sync after 50s.`;
+    if (lastError.error !== undefined) {
+        message += ` The last error was: ${lastError.error}`;
+    }
+    if (agencyDump !== undefined) {
+      message += ` Complete agency dump: ` + JSON.stringify(agencyDump);
+    }
+    if (exception !== undefined) {
+      message += ` Error getting a full agency dump: ` + JSON.stringify(exception);
+    }
+    throw new Error(message);
+  }
+
+  async waitForAgency(): Promise<void> {
+    const getLeader = async (instance: Instance) : Promise<string | undefined> => {
+      try {
+        const baseUrl = endpointToUrl(instance.endpoint);
+        const res = await InstanceManager.rpAgency({
+          uri: baseUrl + "/_api/agency/config",
+          json: true,
+        });
+        const {leaderId} = res;
+        if (typeof leaderId === "string") {
+          return leaderId;
+        }
+      } catch(e) {
+        debugLog(`Error reading agent config: `, e);
+      }
+
+      return undefined;
+    };
+
+    let lastLeaders : undefined | { [key: string]: string | undefined };
+
+    for (
+      const start = Date.now();
+      Date.now() - start < 50e3;
+      await sleep(100)
+    ) {
+      const agents = this.agents();
+      const maybeLeaders = await Promise.all(agents.map(getLeader));
+      const leaders = maybeLeaders
+        .filter(_.isString)
+        .filter(l => l !== '');
+      const allAgentsHaveALeader = maybeLeaders.length === leaders.length;
+      const allLeadersAreTheSame = leaders.length === 0
+          || leaders.every(leader => leader === leaders[0]);
+      if (allAgentsHaveALeader && allLeadersAreTheSame) {
+        return;
+      }
+
+      // This is only for the error message below.
+      lastLeaders = _.zipObject(
+        agents.map(agent => agent.name),
+        maybeLeaders,
+      );
+    }
+
+    throw new Error(
+      `Agents did not all agree on the same leader after 50s. `
+      + `The last leaders per agent were: ` + JSON.stringify(lastLeaders)
+    );
   }
 
   async waitForAllInstances(): Promise<Instance[]> {
     const results = await this.waitForInstances(this.instances);
-    await this.waitForSyncReplication();
+    if (this.hasAgentsOnly()) {
+      await this.waitForAgency();
+    } else {
+      await this.waitForSyncReplication();
+    }
     return results;
   }
 
@@ -982,8 +1077,20 @@ export default class InstanceManager {
   async kill(instance: Instance): Promise<void> {
     this.ensureInstance(instance);
 
-    instance.process!.kill("SIGKILL");
+    // Instance is already dead.
+    if (instance.status === "EXITED") {
+      return;
+    }
+
+    // I'm assuming here that no context switch can happen between the previous
+    // check (status === "EXITED") and the following assignment
+    // (status = "KILLED"). If this assumption is wrong, this would be a race
+    // when the process.on("exit"...) trigger, setting status = "EXITED", would
+    // be executed in between, resulting in an endless loop.
+
     instance.status = "KILLED";
+    instance.process!.kill("SIGKILL");
+
     // Need to convince TypeScript that status does not stay "KILLED" here.
     while ((<Status>instance.status) !== "EXITED") {
       await sleep(50);
@@ -1168,5 +1275,9 @@ export default class InstanceManager {
         .map(coord => this.restart(coord))
     );
     await this.waitForAllInstances();
+  }
+
+  private hasAgentsOnly(): boolean {
+    return this.instances.length === this.agents().length;
   }
 }
