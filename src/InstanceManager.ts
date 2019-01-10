@@ -18,7 +18,8 @@ const WAIT_TIMEOUT = 400; // seconds
 
 const debugLog = (...logLine: any[]) => {
   if (process.env.LOG_IMMEDIATE && process.env.LOG_IMMEDIATE == "1") {
-    console.log(new Date().toISOString(), ...logLine);
+    const [fmt, ...args] = logLine;
+    console.log(new Date().toISOString() + " " + fmt, ...args);
   }
 };
 
@@ -318,6 +319,14 @@ export default class InstanceManager {
     } catch (e) { }
   }
 
+  static access(obj: any, field: string | number) {
+    if (obj[field]) {
+      return obj[field];
+    } else {
+      return undefined;
+    }
+  }
+
   /// Lookup the async failover leader in agency
   async asyncReplicationLeaderId(): Promise<string | null> {
     const baseUrl = endpointToUrl(this.getAgencyEndpoint());
@@ -335,7 +344,9 @@ export default class InstanceManager {
       return null;
     }
 
-    const leader = body[0].arango.Plan.AsyncReplication.Leader;
+    // const leader = body[0].arango.Plan.AsyncReplication.Leader;
+    const leader = [0, "arango", "Plan", "AsyncReplication", "Leader"]
+      .reduce(InstanceManager.access, body);
     if (!leader) {
       return null;
     }
@@ -396,7 +407,7 @@ export default class InstanceManager {
       console.error("Could not find leader instance locally");
       throw new Error("Could not find leader instance locally");
     }
-    console.log("Leader in agency %s (%s)", uuid, instance.endpoint);
+    debugLog("Leader in agency %s (%s)", uuid, instance.endpoint);
     // we need to wait for the server to get out of maintenance mode
     await InstanceManager.asyncWaitInstanceOperational(instance.endpoint);
     return instance;
@@ -538,7 +549,6 @@ export default class InstanceManager {
     await this.waitForInstances(this.agents());
     debugLog("all agents are booted");
 
-    await sleep(2000);
     const dbServers = Array.from(Array(numDbServers).keys()).map(index => {
       return this.startDbServer("dbServer-" + (index + 1));
     });
@@ -547,7 +557,6 @@ export default class InstanceManager {
     await Promise.all(dbServers);
     await this.waitForInstances(this.dbServers());
     debugLog("all DBServers are booted");
-    await sleep(2000);
 
     const coordinators = Array.from(Array(numCoordinators).keys()).map(
       index => {
@@ -558,7 +567,7 @@ export default class InstanceManager {
     await Promise.all(coordinators);
     debugLog("all Coordinators are booted");
 
-    debugLog("waiting for /_api/version to succeed an all servers");
+    debugLog("waiting for /_api/version to succeed on all servers");
     await this.waitForAllInstances();
     debugLog("adding server IDs to all instances");
     await this.addIdsToAllInstances();
@@ -678,12 +687,15 @@ export default class InstanceManager {
         Object.values(plan).map(colInfo => colInfo.name)
       );
 
-      for (const collection of systemCollections) {
-        if (!planCollections.has(collection)) {
-          debugLog(`collection ${collection} still missing from Plan`);
-          lastError.error = `collection ${collection} still missing from Plan`;
-          return false;
-        }
+      const missingCollections =
+        _.filter(systemCollections,
+          collection => !planCollections.has(collection)
+        );
+
+      if (missingCollections.length > 0) {
+        debugLog(`collections ${missingCollections} still missing from Plan`);
+        lastError.error = `collections ${missingCollections} still missing from Plan`;
+        return false;
       }
 
       // inverse check if there are any system collections we haven't included.
@@ -797,10 +809,10 @@ export default class InstanceManager {
         message += ` The last error was: ${lastError.error}`;
     }
     if (agencyDump !== undefined) {
-      message += ` Complete agency dump: ` + JSON.stringify(agencyDump);
+      message += `; Complete agency dump: ` + JSON.stringify(agencyDump);
     }
     if (exception !== undefined) {
-      message += ` Error getting a full agency dump: ` + JSON.stringify(exception);
+      message += `; Error getting a full agency dump: ` + JSON.stringify(exception);
     }
     throw new Error(message);
   }
@@ -858,10 +870,15 @@ export default class InstanceManager {
 
   async waitForAllInstances(): Promise<Instance[]> {
     const results = await this.waitForInstances(this.instances);
-    if (this.hasAgentsOnly()) {
-      await this.waitForAgency();
-    } else {
+    if (this.hasDbServers()) {
+      // This is the cluster case: When we have DB Servers, we also have an
+      // agency.
+      // In this case, we wait for synchronous replication.
       await this.waitForSyncReplication();
+    } else {
+      // We have just an agency and/or single servers (possibly with active
+      // failover).
+      await this.waitForAgency();
     }
     return results;
   }
@@ -1145,7 +1162,9 @@ export default class InstanceManager {
           );
         }
         // Send SIGABRT to produce a core dump.
-        console.warn(`Sending SIGABRT to ${instance.name} due to timeout. PID is ${instance.process.pid}.`);
+        console.warn(
+          `Sending SIGABRT to ${instance.name} due to timeout `
+          + `during shutdown. PID is ${instance.process.pid}.`);
         instance.process.kill("SIGABRT");
         instance.status = "KILLED";
         throw new Error(`Reached shutdown timeout, logfile is ${instance.logFile}`);
@@ -1277,7 +1296,7 @@ export default class InstanceManager {
     await this.waitForAllInstances();
   }
 
-  private hasAgentsOnly(): boolean {
+  private hasDbServers(): boolean {
     return this.instances.length === this.agents().length;
   }
 }
