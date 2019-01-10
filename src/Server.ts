@@ -97,7 +97,7 @@ export default class Server {
         asyncMiddleware(
           async (req: Request, res: Response): Promise<any> => {
             const name = req.params.name;
-            await this.im.waitForInstance(this.instance(name));
+            await InstanceManager.waitForInstance(this.instance(name));
             res.send({});
           }
         )
