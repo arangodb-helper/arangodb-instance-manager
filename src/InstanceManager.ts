@@ -927,9 +927,11 @@ export default class InstanceManager {
         });
 
       if (this.instances.every(inst => inst.hasOwnProperty('id'))) {
-        break;
+        return;
       }
     }
+
+    throw new Error('Failed adding IDs to all instances');
   }
 
   private getCoordinator() : Instance {
@@ -1297,6 +1299,6 @@ export default class InstanceManager {
   }
 
   private hasDbServers(): boolean {
-    return this.instances.length === this.agents().length;
+    return this.dbServers().length > 0;
   }
 }
