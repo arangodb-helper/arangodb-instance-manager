@@ -18,4 +18,5 @@ export default interface Instance {
   role: Role;
   id?: string;
   version?: VersionResponse;
+  dir?: string;
 }

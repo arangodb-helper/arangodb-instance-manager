@@ -7,4 +7,5 @@ export default interface Runner {
   restart(instance: Instance): Promise<Instance>;
   destroy(instance: Instance): Promise<void>;
   cleanup(retainDir: boolean): Promise<void>;
+  getRootDir(): string;
 }

@@ -2,6 +2,7 @@
 import _ = require("lodash");
 import dd = require("dedent");
 import rp = require("request-promise-native");
+import fs = require("fs");
 import { UriOptions } from "request";
 import DockerRunner from "./DockerRunner";
 import { FailoverError } from "./Errors";
@@ -10,6 +11,8 @@ import LocalRunner from "./LocalRunner";
 import Runner from "./Runner";
 import { compareTicks, endpointToUrl } from "./common";
 import VersionResponse, { Version } from "./VersionResponse";
+import * as path from "path";
+import { EEXIST } from "constants";
 
 // Arango error code for "shutdown in progress"
 const ERROR_SHUTTING_DOWN = 30;
@@ -22,6 +25,8 @@ const debugLog = (...logLine: any[]) => {
     console.log(new Date().toISOString() + " " + fmt, ...args);
   }
 };
+
+const isNonEmptyString = (x: any) : x is string => _.isString(x) && x !== '';
 
 // 180s, after this time we kill -9 the instance
 const shutdownKillAfterSeconds = 180;
@@ -65,10 +70,16 @@ export default class InstanceManager {
     storageEngine: "rocksdb" | "mmfiles" = "mmfiles"
   ) {
     this.instances = [];
+    let instancesDirectory : string | undefined;
+    if (isNonEmptyString(process.env.ARANGO_INSTANCES_DIR)) {
+      instancesDirectory = process.env.ARANGO_INSTANCES_DIR;
+      InstanceManager.createDir(instancesDirectory);
+    }
 
     if (runner === "local") {
-      this.runner = new LocalRunner(pathOrImage);
+      this.runner = new LocalRunner(pathOrImage, instancesDirectory);
     } else if (runner === "docker") {
+      // TODO The DockerRunner does have no concept of instance directories
       this.runner = new DockerRunner(pathOrImage);
     } else {
       throw new Error("Unkown runner type");
@@ -439,6 +450,7 @@ export default class InstanceManager {
       //throw new Error("No followers to wait for");
     }
 
+    // TODO replace this loop by something more readable
     let tttt = Math.ceil(timoutSecs * 4);
     for (let i = 0; i < tttt; i++) {
       const result = await Promise.all(
@@ -1021,7 +1033,13 @@ export default class InstanceManager {
     }
   }
 
-  async cleanup(retainDir: boolean = false): Promise<string> {
+  // Setting collectCores = true with a DockerRunner will result in an
+  // exception.
+  // Unless retainDir is true as well, setting collectCores to true will have
+  // no effect. retainDir will automatically set to true on a shutdown failure.
+  async cleanup(retainDir: boolean = false,
+                collectCores: boolean = false,
+                notes?: string): Promise<string> {
     try {
         await this.shutdownCluster();
     } catch (e) {
@@ -1029,6 +1047,15 @@ export default class InstanceManager {
       debugLog(e);
       retainDir = true;
     }
+
+    if (retainDir && notes !== undefined) {
+      this.writeNotes(notes);
+    }
+
+    if (retainDir && collectCores) {
+      this.collectCores();
+    }
+
     this.instances = [];
     this.agentCounter = 0;
     this.coordinatorCounter = 0;
@@ -1038,6 +1065,44 @@ export default class InstanceManager {
     let log = this.currentLog;
     this.currentLog = "";
     return log;
+  }
+
+  // Move core files to instance directories, using PIDs to match instances
+  // to core files.
+  // Expects core files to begin with `core-%p-`, where %p is the pid, and to be
+  // in the current working directory.
+  // TODO Reading /proc/sys/kernel/core_pattern to detect the core pattern would
+  // be nice!
+  private collectCores(): void {
+    for (const instance of this.instances) {
+      if (!instance.dir) {
+        // This is expected to happen if the DockerRunner is used with
+        // collectCores, as it does not (yet) have a concept of an instance
+        // directory.
+        console.error(`Instance ${instance.name} has no directory set! `);
+        continue;
+      }
+      if (instance.process) {
+        const pid = instance.process.pid;
+        const re = new RegExp(`^core-${pid}-`);
+        const coreFn = fs.readdirSync(".").find(fn => re.test(fn));
+        if (coreFn) {
+          debugLog(`Moving core file ${coreFn} to ${instance.dir}`);
+          fs.renameSync(coreFn, path.join(instance.dir, coreFn));
+        }
+      }
+    }
+  }
+
+  private writeNotes(notes: string): void {
+    try {
+      const dir = this.runner.getRootDir();
+      const fn = path.join(dir, 'NOTES');
+
+      fs.writeFileSync(fn, notes);
+    } catch(e) {
+      console.error(`Failed writing NOTES: ${e}`);
+    }
   }
 
   dbServers(): Instance[] {
@@ -1300,5 +1365,18 @@ export default class InstanceManager {
 
   private hasDbServers(): boolean {
     return this.dbServers().length > 0;
+  }
+
+  private static createDir(dirPath: string) {
+    try {
+      fs.mkdirSync(dirPath);
+      debugLog(`Created directory '${dirPath}'`);
+    } catch (e) {
+      if (e.errno === -EEXIST) {
+      }
+      else {
+        throw e;
+      }
+    }
   }
 }
