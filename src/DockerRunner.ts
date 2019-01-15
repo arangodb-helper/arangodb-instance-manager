@@ -144,4 +144,8 @@ export default class DockerRunner implements Runner {
       this.containerName(instance) + "-tmp-container"
     ]);
   }
+
+  getRootDir() : string {
+    throw new Error("DockerRunner.getRootDir() is not implemented");
+  }
 }
