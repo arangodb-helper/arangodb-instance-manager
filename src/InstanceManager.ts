@@ -640,7 +640,7 @@ export default class InstanceManager {
       "_aqlfunctions",
       "_frontend",
       "_graphs",
-      "_iresearch_analyzers",
+      "_analyzers",
       "_jobs",
       "_modules",
       "_queues",
@@ -652,9 +652,15 @@ export default class InstanceManager {
     ]);
     const version = this.getArangoVersion();
 
+    // _analyzers are available since 3.5
     if (version.major <= 3 && version.minor < 4) {
-      // _iresearch_analyzers is available only since 3.4
-      systemCollections.delete('_iresearch_analyzers');
+      systemCollections.delete('_analyzers');
+    }
+    // except in 3.4 (and only in 3.4) they were called
+    // _iresearch_analyzers
+    if (version.major <= 3 && version.minor == 4) {
+      systemCollections.delete('_analyzers');
+      systemCollections.add('_iresearch_analyzers');
     }
 
     const allInSync = function (
