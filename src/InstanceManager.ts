@@ -658,7 +658,7 @@ export default class InstanceManager {
     }
     // except in 3.4 (and only in 3.4) they were called
     // _iresearch_analyzers
-    if (version.major <= 3 && version.minor == 4) {
+    if (version.major == 3 && version.minor == 4) {
       systemCollections.delete('_analyzers');
       systemCollections.add('_iresearch_analyzers');
     }
