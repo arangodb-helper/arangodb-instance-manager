@@ -638,6 +638,7 @@ export default class InstanceManager {
       "_appbundles",
       "_apps",
       "_aqlfunctions",
+      "_fishbowl",
       "_frontend",
       "_graphs",
       "_analyzers",
