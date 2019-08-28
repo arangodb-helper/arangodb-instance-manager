@@ -43,6 +43,7 @@
     "typescript": "^2.8.3"
   },
   "scripts": {
+    "prepublish": "tsc -p . --outDir ./lib/",
     "compile": "tsc -p . --outDir ./lib/"
   }
 }
