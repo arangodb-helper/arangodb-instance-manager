@@ -1,6 +1,5 @@
 "use strict";
 import _ = require("lodash");
-import dd = require("dedent");
 import rp = require("request-promise-native");
 import fs = require("fs");
 import { UriOptions } from "request";
@@ -597,10 +596,13 @@ export default class InstanceManager {
       await sleep(100)
     ) {
       if (instance.status !== "RUNNING") {
-        throw new Error(dd`
-          Instance ${instance.name} is down!
-          Real status ${instance.status} with exitcode ${instance.exitcode}.
-          See logfile here ${instance.logFile}`);
+        throw new Error(
+          `Instance ${instance.name} is down!\nReal status ${
+            instance.status
+          } with exitcode ${instance.exitcode}.${
+            instance.logFile ? `\nSee logfile here ${instance.logFile}` : ""
+          }`
+        );
       }
 
       try {
