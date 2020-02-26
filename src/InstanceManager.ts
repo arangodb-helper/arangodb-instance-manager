@@ -380,24 +380,24 @@ export default class InstanceManager {
 
   /// wait for leader selection (leader key is in agency)
   async asyncReplicationLeaderSelected(
-    ignore = null,
+    ignore: string | null = null,
     timeoutSec = 25
   ): Promise<string> {
     let i = timeoutSec * 10; // should be max 30s according to spec
+    let uuid: string | null = null;
     while (i-- > 0) {
-      let val = await this.asyncReplicationLeaderId();
-      if (val !== null && ignore !== val) {
-        return val;
+      uuid = await this.asyncReplicationLeaderId();
+      if (uuid !== null && ignore !== uuid) {
+        return uuid;
       }
       await sleep(100);
     }
-    let uuid = await this.asyncReplicationLeaderId();
     console.error("Timout waiting for leader selection");
     if (uuid) {
       console.error(
         "Invalid leader in agency: %s (%s)",
         uuid,
-        this.resolveUUID(uuid)
+        await this.resolveUUID(uuid)
       );
     } else {
       console.error("No leader in agency");
