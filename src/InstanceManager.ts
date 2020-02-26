@@ -908,11 +908,7 @@ export default class InstanceManager {
     const allWaiters = instances.map(instance =>
       InstanceManager.waitForInstance(instance)
     );
-    const results = [];
-    for (let waiter of allWaiters) {
-      results.push(await waiter);
-    }
-    return results;
+    return await Promise.all(allWaiters);
   }
 
   private async addIdsToAllInstances(): Promise<void> {
