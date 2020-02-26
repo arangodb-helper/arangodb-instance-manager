@@ -51,14 +51,11 @@ export default class Server {
       )
     );
 
-    router.delete(
-      "/",
-      (_req: Request, res: Response): any => {
-        this.im.cleanup();
-        this.im = new InstanceManager(pathOrImage, runner, storageEngine);
-        res.send({});
-      }
-    );
+    router.delete("/", (_req: Request, res: Response): any => {
+      this.im.cleanup();
+      this.im = new InstanceManager(pathOrImage, runner, storageEngine);
+      res.send({});
+    });
 
     router.get(
       "/instance/coordinators",
@@ -67,12 +64,9 @@ export default class Server {
       }
     );
 
-    router.get(
-      "/instance/single",
-      (_req: Request, res: Response): any => {
-        res.send(this.forClient(this.im.singleServers()));
-      }
-    );
+    router.get("/instance/single", (_req: Request, res: Response): any => {
+      res.send(this.forClient(this.im.singleServers()));
+    });
 
     router.head(
       "/instance",
@@ -86,13 +80,11 @@ export default class Server {
 
     router
       .route("/instance/:name")
-      .get(
-        (req: Request, res: Response): any => {
-          const name = req.params.name;
-          const instance = this.instance(name);
-          res.send(this.forClient([instance])[0]);
-        }
-      )
+      .get((req: Request, res: Response): any => {
+        const name = req.params.name;
+        const instance = this.instance(name);
+        res.send(this.forClient([instance])[0]);
+      })
       .head(
         asyncMiddleware(
           async (req: Request, res: Response): Promise<any> => {

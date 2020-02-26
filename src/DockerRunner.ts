@@ -1,8 +1,8 @@
 "use strict";
 import { exec, spawn } from "child_process";
+import { createEndpoint, portFromEndpoint, startInstance } from "./common";
 import Instance from "./Instance";
 import Runner from "./Runner";
-import { createEndpoint, portFromEndpoint, startInstance } from "./common";
 import crypto = require("crypto");
 import which = require("which");
 
@@ -145,7 +145,7 @@ export default class DockerRunner implements Runner {
     ]);
   }
 
-  getRootDir() : string {
+  getRootDir(): string {
     throw new Error("DockerRunner.getRootDir() is not implemented");
   }
 }

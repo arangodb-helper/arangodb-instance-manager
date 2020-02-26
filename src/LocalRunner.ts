@@ -1,12 +1,12 @@
 "use strict";
 import path = require("path");
+import { SimpleOptions } from "tmp";
+import { createEndpoint, startInstance } from "./common";
 import Instance from "./Instance";
 import Runner from "./Runner";
-import { createEndpoint, startInstance } from "./common";
 import tmp = require("tmp");
 import mkdirp = require("mkdirp-promise");
 import rmRf = require("rmfr");
-import { SimpleOptions } from "tmp";
 
 const debugLog = (...logLine: any[]) => {
   if (process.env.LOG_IMMEDIATE && process.env.LOG_IMMEDIATE == "1") {
@@ -87,13 +87,15 @@ export default class LocalRunner implements Runner {
     if (retainDir) {
       console.warn(`Test failed, won't remove directory ${oldDirectory}`);
       return Promise.resolve();
-    } else if(oldDirectory !== undefined) {
+    } else if (oldDirectory !== undefined) {
       // TODO remove the log message
       debugLog(`Removing directory ${oldDirectory}`);
       return rmRf(oldDirectory);
     } else {
-      console.warn(`There is no rootDir, `
-        + `did you call cleanup before starting an instance?`);
+      console.warn(
+        `There is no rootDir, ` +
+          `did you call cleanup before starting an instance?`
+      );
       return Promise.resolve();
     }
   }
@@ -106,8 +108,10 @@ export default class LocalRunner implements Runner {
 
   private createNewRootDir(): void {
     if (this.rootDir !== undefined) {
-      console.error(`Creating a new root directory, but the old wasn't cleaned `
-        + `up! Old directory was: ${this.rootDir}`);
+      console.error(
+        `Creating a new root directory, but the old wasn't cleaned ` +
+          `up! Old directory was: ${this.rootDir}`
+      );
     }
 
     this.rootDir = tmp.dirSync(this.newDirOptions).name;

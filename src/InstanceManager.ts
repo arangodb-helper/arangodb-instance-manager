@@ -2,16 +2,16 @@
 import _ = require("lodash");
 import rp = require("request-promise-native");
 import fs = require("fs");
+import { EEXIST } from "constants";
+import * as path from "path";
 import { UriOptions } from "request";
+import { compareTicks, endpointToUrl } from "./common";
 import DockerRunner from "./DockerRunner";
 import { FailoverError } from "./Errors";
 import Instance, { Role, Status } from "./Instance";
 import LocalRunner from "./LocalRunner";
 import Runner from "./Runner";
-import { compareTicks, endpointToUrl } from "./common";
 import VersionResponse, { Version } from "./VersionResponse";
-import * as path from "path";
-import { EEXIST } from "constants";
 
 // Arango error code for "shutdown in progress"
 const ERROR_SHUTTING_DOWN = 30;
@@ -25,7 +25,7 @@ const debugLog = (...logLine: any[]) => {
   }
 };
 
-const isNonEmptyString = (x: any) : x is string => _.isString(x) && x !== '';
+const isNonEmptyString = (x: any): x is string => _.isString(x) && x !== "";
 
 // 180s, after this time we kill -9 the instance
 const shutdownKillAfterSeconds = 180;
@@ -45,10 +45,9 @@ function isHealth(x: any): x is HealthResponse {
 }
 
 function toHealth(x: any): HealthResponse {
-  if(isHealth(x)) {
+  if (isHealth(x)) {
     return x;
-  }
-  else {
+  } else {
     throw new TypeError(`Not a Health object: ${x}`);
   }
 }
@@ -69,7 +68,7 @@ export default class InstanceManager {
     storageEngine: "rocksdb" | "mmfiles" = "mmfiles"
   ) {
     this.instances = [];
-    let instancesDirectory : string | undefined;
+    let instancesDirectory: string | undefined;
     if (isNonEmptyString(process.env.ARANGO_INSTANCES_DIR)) {
       instancesDirectory = process.env.ARANGO_INSTANCES_DIR;
       InstanceManager.createDir(instancesDirectory);
@@ -215,7 +214,7 @@ export default class InstanceManager {
     const args = [
       "--cluster.agency-endpoint=" + this.getAgencyEndpoint(),
       "--cluster.my-role=COORDINATOR",
-      "--cluster.my-address=" + endpoint,
+      "--cluster.my-address=" + endpoint
     ];
     const instance = await this.startArango(
       name,
@@ -227,7 +226,10 @@ export default class InstanceManager {
     return instance;
   }
 
-  async replace(instance: Instance, withNewEndpoint = false): Promise<Instance> {
+  async replace(
+    instance: Instance,
+    withNewEndpoint = false
+  ): Promise<Instance> {
     let name, role;
     switch (instance.role) {
       case "coordinator":
@@ -326,7 +328,7 @@ export default class InstanceManager {
         body: [["/"]]
       });
       console.error(JSON.stringify(body));
-    } catch (e) { }
+    } catch (e) {}
   }
 
   static access(obj: any, field: string | number) {
@@ -355,8 +357,10 @@ export default class InstanceManager {
     }
 
     // const leader = body[0].arango.Plan.AsyncReplication.Leader;
-    const leader = [0, "arango", "Plan", "AsyncReplication", "Leader"]
-      .reduce(InstanceManager.access, body);
+    const leader = [0, "arango", "Plan", "AsyncReplication", "Leader"].reduce(
+      InstanceManager.access,
+      body
+    );
     if (!leader) {
       return null;
     }
@@ -370,9 +374,7 @@ export default class InstanceManager {
     let singles = this.singleServers();
     if (servers.length !== singles.length) {
       throw new Error(
-        `AsyncReplication: Requested ${singles.length}, but ${
-        servers.length
-        } ready`
+        `AsyncReplication: Requested ${singles.length}, but ${servers.length} ready`
       );
     }
     return leader;
@@ -424,7 +426,9 @@ export default class InstanceManager {
   }
 
   /// Wait for servers to get in sync
-  private static async getApplierState(url: string): Promise<rp.RequestPromise> {
+  private static async getApplierState(
+    url: string
+  ): Promise<rp.RequestPromise> {
     url = endpointToUrl(url);
     const body = await rp.get({
       json: true,
@@ -453,7 +457,9 @@ export default class InstanceManager {
     let tttt = Math.ceil(timoutSecs * 4);
     for (let i = 0; i < tttt; i++) {
       const result = await Promise.all(
-        followers.map(async flw => InstanceManager.getApplierState(flw.endpoint))
+        followers.map(async flw =>
+          InstanceManager.getApplierState(flw.endpoint)
+        )
       );
       // is follower running, pulling from current leader and tick values are equal ?
       let unfinished = result.filter(
@@ -461,7 +467,7 @@ export default class InstanceManager {
           !result.state.running ||
           result.endpoint !== leader.endpoint ||
           compareTicks(result.state.lastProcessedContinuousTick, leaderTick) ==
-          -1
+            -1
       );
       if (unfinished.length == 0) {
         return true;
@@ -490,7 +496,7 @@ export default class InstanceManager {
         if (res.code === 200) {
           return true; // worked
         }
-      } catch (ignored) { }
+      } catch (ignored) {}
       await sleep(500); // 0.5s
     }
     console.error("Leader did not figure out leadership in time");
@@ -608,7 +614,7 @@ export default class InstanceManager {
       try {
         const response = await rp.get({
           uri: endpointToUrl(instance.endpoint) + "/_api/version",
-          json: true,
+          json: true
         });
 
         try {
@@ -657,23 +663,23 @@ export default class InstanceManager {
 
     // _analyzers are available since 3.5
     if (version.major <= 3 && version.minor < 4) {
-      systemCollections.delete('_analyzers');
+      systemCollections.delete("_analyzers");
     }
     // except in 3.4 (and only in 3.4) they were called
     // _iresearch_analyzers
     if (version.major == 3 && version.minor == 4) {
-      systemCollections.delete('_analyzers');
-      systemCollections.add('_iresearch_analyzers');
+      systemCollections.delete("_analyzers");
+      systemCollections.add("_iresearch_analyzers");
     }
 
-    const allInSync = function (
-      current: { [key:string]: { [key:string]: { servers: Array<string> } } },
+    const allInSync = function(
+      current: { [key: string]: { [key: string]: { servers: Array<string> } } },
       expectedDistribution: Map<string, Map<string, Array<string>>>,
       colIdToName: Map<string, string>,
       lastError: { error?: string }
     ) {
       for (const [collectionId, shards] of expectedDistribution) {
-      const collection = colIdToName.get(collectionId);
+        const collection = colIdToName.get(collectionId);
         for (const [shard, servers] of shards) {
           if (!current[collectionId]) {
             debugLog(`Collection not yet in Current: ${collection}`);
@@ -686,13 +692,15 @@ export default class InstanceManager {
             return false;
           }
           if (!_.isEqual(current[collectionId][shard].servers, servers)) {
-            debugLog(`Not in sync: ${collection}/${shard}. `
-              + `Expected: ${servers}, `
-              + `actual: ${current[collectionId][shard].servers}`
+            debugLog(
+              `Not in sync: ${collection}/${shard}. ` +
+                `Expected: ${servers}, ` +
+                `actual: ${current[collectionId][shard].servers}`
             );
-            lastError.error = `Not in sync: ${collection}/${shard}. `
-              + `Expected: ${servers}, `
-              + `actual: ${current[collectionId][shard].servers}`;
+            lastError.error =
+              `Not in sync: ${collection}/${shard}. ` +
+              `Expected: ${servers}, ` +
+              `actual: ${current[collectionId][shard].servers}`;
             return false;
           }
         }
@@ -703,15 +711,18 @@ export default class InstanceManager {
       return true;
     };
 
-    const allSystemCollectionsInPlan = function (plan: Object, lastError: {error?: string}) {
+    const allSystemCollectionsInPlan = function(
+      plan: Object,
+      lastError: { error?: string }
+    ) {
       const planCollections = new Set(
         Object.values(plan).map(colInfo => colInfo.name)
       );
 
-      const missingCollections =
-        _.filter(systemCollections,
-          collection => !planCollections.has(collection)
-        );
+      const missingCollections = _.filter(
+        systemCollections,
+        collection => !planCollections.has(collection)
+      );
 
       if (missingCollections.length > 0) {
         debugLog(`collections ${missingCollections} still missing from Plan`);
@@ -723,17 +734,17 @@ export default class InstanceManager {
       // If that's so, there's probably a new one which has to be added for some
       // versions of arangodb.
       for (const collection of planCollections) {
-        if (!collection.startsWith('_')) {
+        if (!collection.startsWith("_")) {
           // maybe a collection was added by a test. skip those.
           continue;
         }
 
         if (!systemCollections.has(collection)) {
           throw new Error(
-            `Unexpected system collection '${collection}'. `
-            + `If you encounter this error, you probably have to update the `
-            + `instance manager by adding the new system collection(s). Make `
-            + `sure you only do it for the affected versions.`
+            `Unexpected system collection '${collection}'. ` +
+              `If you encounter this error, you probably have to update the ` +
+              `instance manager by adding the new system collection(s). Make ` +
+              `sure you only do it for the affected versions.`
           );
         }
       }
@@ -743,22 +754,26 @@ export default class InstanceManager {
       return true;
     };
 
-    const colIdToNameFromPlan = (plan: Object) => new Map(
-      Object.entries(plan)
-        .map<[string, string]>(([id, colInfo]) => [id, colInfo.name])
-    );
+    const colIdToNameFromPlan = (plan: Object) =>
+      new Map(
+        Object.entries(plan).map<[string, string]>(([id, colInfo]) => [
+          id,
+          colInfo.name
+        ])
+      );
 
-    const planToDistribution = function (plan: Object) {
+    const planToDistribution = function(plan: Object) {
       return new Map(
-        Object.entries(plan)
-          .map<[string, Map<string, Array<string>>]>(([colId, colInfo]) => {
+        Object.entries(plan).map<[string, Map<string, Array<string>>]>(
+          ([colId, colInfo]) => {
             return [colId, new Map(Object.entries(colInfo.shards))];
-          })
+          }
+        )
       );
     };
 
-    const lastError : {error?: string} = {
-      error: undefined,
+    const lastError: { error?: string } = {
+      error: undefined
     };
 
     // We wait at most 50s for everything to get in sync
@@ -768,15 +783,17 @@ export default class InstanceManager {
       await sleep(100)
     ) {
       debugLog(`Checking if everything is in sync...`);
-      const agencyQuery =
-        [["/arango/Plan/Collections/_system",
-          "/arango/Current/Collections/_system",
-        ]];
+      const agencyQuery = [
+        [
+          "/arango/Plan/Collections/_system",
+          "/arango/Current/Collections/_system"
+        ]
+      ];
       const [info] = await InstanceManager.rpAgency({
         method: "POST",
         uri: baseUrl + "/_api/agency/read",
         json: true,
-        body: agencyQuery,
+        body: agencyQuery
       });
 
       if (
@@ -795,21 +812,26 @@ export default class InstanceManager {
           // The outer Map's keys are collection IDs,
           // the inner Map's keys are shards,
           // the inner Map's values are lists of DBServer IDs.
-          const expectedDistribution: Map<string, Map<string, Array<string>>>
-            = planToDistribution(plan);
+          const expectedDistribution: Map<
+            string,
+            Map<string, Array<string>>
+          > = planToDistribution(plan);
 
           const colIdToName = colIdToNameFromPlan(plan);
 
-          if (allInSync(current, expectedDistribution, colIdToName, lastError)) {
+          if (
+            allInSync(current, expectedDistribution, colIdToName, lastError)
+          ) {
             // Everything's fine
             return;
           }
         }
       } else {
-
-        lastError.error = "Got unexpected result from AgencyPlan: "
-          + JSON.stringify(info)
-          + " as result of the query " + JSON.stringify(agencyQuery);
+        lastError.error =
+          "Got unexpected result from AgencyPlan: " +
+          JSON.stringify(info) +
+          " as result of the query " +
+          JSON.stringify(agencyQuery);
         debugLog("Got unexpected result from AgencyPlan:", info);
       }
     }
@@ -820,44 +842,48 @@ export default class InstanceManager {
         method: "POST",
         uri: baseUrl + "/_api/agency/read",
         json: true,
-        body: [["/"]],
+        body: [["/"]]
       });
-    } catch(e) { exception = e;}
-
+    } catch (e) {
+      exception = e;
+    }
 
     let message = `Plan and Current didn't come in sync after 50s.`;
     if (lastError.error !== undefined) {
-        message += ` The last error was: ${lastError.error}`;
+      message += ` The last error was: ${lastError.error}`;
     }
     if (agencyDump !== undefined) {
       message += `; Complete agency dump: ` + JSON.stringify(agencyDump);
     }
     if (exception !== undefined) {
-      message += `; Error getting a full agency dump: ` + JSON.stringify(exception);
+      message +=
+        `; Error getting a full agency dump: ` + JSON.stringify(exception);
     }
     throw new Error(message);
   }
 
   async waitForAgency(): Promise<void> {
-    const getLeader = async (instance: Instance) : Promise<string | undefined> => {
+    const getLeader = async (
+      instance: Instance
+    ): Promise<string | undefined> => {
       try {
         const baseUrl = endpointToUrl(instance.endpoint);
         const res = await InstanceManager.rpAgency({
           uri: baseUrl + "/_api/agency/config",
-          json: true,
+          json: true
         });
-        const {leaderId} = res;
+        const { leaderId } = res;
         if (typeof leaderId === "string") {
           return leaderId;
         }
-      } catch(e) {
+      } catch (e) {
         debugLog(`Error reading agent config: `, e);
       }
 
       return undefined;
     };
 
-    let lastLeaders : undefined | { [key: string]: string | undefined };
+    let lastLeaders: undefined | { [key: string]: string | undefined };
 
     for (
       const start = Date.now();
@@ -866,12 +892,10 @@ export default class InstanceManager {
     ) {
       const agents = this.agents();
       const maybeLeaders = await Promise.all(agents.map(getLeader));
-      const leaders = maybeLeaders
-        .filter(_.isString)
-        .filter(l => l !== '');
+      const leaders = maybeLeaders.filter(_.isString).filter(l => l !== "");
       const allAgentsHaveALeader = maybeLeaders.length === leaders.length;
-      const allLeadersAreTheSame = leaders.length === 0
-          || leaders.every(leader => leader === leaders[0]);
+      const allLeadersAreTheSame =
+        leaders.length === 0 || leaders.every(leader => leader === leaders[0]);
       if (allAgentsHaveALeader && allLeadersAreTheSame) {
         return;
       }
@@ -879,13 +903,14 @@ export default class InstanceManager {
       // This is only for the error message below.
       lastLeaders = _.zipObject(
         agents.map(agent => agent.name),
-        maybeLeaders,
+        maybeLeaders
       );
     }
 
     throw new Error(
-      `Agents did not all agree on the same leader after 50s. `
-      + `The last leaders per agent were: ` + JSON.stringify(lastLeaders)
+      `Agents did not all agree on the same leader after 50s. ` +
+        `The last leaders per agent were: ` +
+        JSON.stringify(lastLeaders)
     );
   }
 
@@ -920,19 +945,20 @@ export default class InstanceManager {
       const coordinator = this.getCoordinator();
       const res = await rp({
         url: this.getEndpointUrl(coordinator) + "/_admin/cluster/health",
-        json: true,
+        json: true
       });
       const healthEntries = Object.entries(res.Health);
 
       const endpointToId = new Map<string, string>(
-        healthEntries.map<[string, string]>(
-          ([id, infos]) => [toHealth(infos).Endpoint, id]
-        )
+        healthEntries.map<[string, string]>(([id, infos]) => [
+          toHealth(infos).Endpoint,
+          id
+        ])
       );
 
       this.instances
-      // skip instances which already got ids
-        .filter(instance => !instance.hasOwnProperty('id'))
+        // skip instances which already got ids
+        .filter(instance => !instance.hasOwnProperty("id"))
         .forEach(instance => {
           const endpoint = this.getEndpoint(instance);
           // set id if we could find it
@@ -943,20 +969,20 @@ export default class InstanceManager {
           }
         });
 
-      if (this.instances.every(inst => inst.hasOwnProperty('id'))) {
+      if (this.instances.every(inst => inst.hasOwnProperty("id"))) {
         return;
       }
     }
 
-    throw new Error('Failed adding IDs to all instances');
+    throw new Error("Failed adding IDs to all instances");
   }
 
-  private getCoordinator() : Instance {
-    const runningCoords = this
-      .coordinators()
-      .filter(server => server.status == "RUNNING");
+  private getCoordinator(): Instance {
+    const runningCoords = this.coordinators().filter(
+      server => server.status == "RUNNING"
+    );
     if (runningCoords.length === 0) {
-      throw new Error('No coordinator is running');
+      throw new Error("No coordinator is running");
     }
 
     return runningCoords[0];
@@ -966,7 +992,7 @@ export default class InstanceManager {
     return (instance || this.coordinators()[0]).endpoint;
   }
 
-  private getRunningInstances() : Instance[] {
+  private getRunningInstances(): Instance[] {
     return this.instances.filter(server => server.status == "RUNNING");
   }
 
@@ -975,14 +1001,16 @@ export default class InstanceManager {
     const instances = this.getRunningInstances();
 
     if (instances.length === 0) {
-      throw new Error('No running instances.');
+      throw new Error("No running instances.");
     }
 
     const inst = instances[0];
 
     if (inst.version === undefined) {
-      throw new Error('Expected a running instance to have its version set. '
-      + 'Did someone forget to call waitForInstance() on it?');
+      throw new Error(
+        "Expected a running instance to have its version set. " +
+          "Did someone forget to call waitForInstance() on it?"
+      );
     }
 
     return inst.version.version;
@@ -1005,35 +1033,32 @@ export default class InstanceManager {
     const collectAsyncErrors = async (promise: Promise<Instance>) => {
       try {
         await promise;
-      }
-      catch (e) {
+      } catch (e) {
         errors.push(e);
       }
     };
 
     const shutdownAll = async (instances: Instance[]) => {
       return await Promise.all(
-        instances
-          .map(inst => this.shutdown(inst))
-          .map(collectAsyncErrors)
+        instances.map(inst => this.shutdown(inst)).map(collectAsyncErrors)
       );
     };
 
     // Shut down in order. Wait for all servers of a kind to finish before
     // starting to shut down the next. This holds especially for the agents!
-    debugLog('Shutting down all coordinators');
+    debugLog("Shutting down all coordinators");
     await shutdownAll(this.coordinators());
-    debugLog('Shutting down all dbServers, coordinators should all be down');
+    debugLog("Shutting down all dbServers, coordinators should all be down");
     await shutdownAll(this.dbServers());
-    debugLog('Shutting down all singleServers');
+    debugLog("Shutting down all singleServers");
     await shutdownAll(this.singleServers());
-    debugLog('Shutting down all agents, everything else should be down');
+    debugLog("Shutting down all agents, everything else should be down");
     await shutdownAll(this.agents());
 
     if (errors.length > 0) {
       throw new Error(
-        `Caught ${errors.length} error(s) during shutdownCluster:\n`
-        + errors.map(e => e.toString()).join("\n")
+        `Caught ${errors.length} error(s) during shutdownCluster:\n` +
+          errors.map(e => e.toString()).join("\n")
       );
     }
   }
@@ -1042,11 +1067,13 @@ export default class InstanceManager {
   // exception.
   // Unless retainDir is true as well, setting collectCores to true will have
   // no effect. retainDir will automatically set to true on a shutdown failure.
-  async cleanup(retainDir: boolean = false,
-                collectCores: boolean = false,
-                notes?: string): Promise<string> {
+  async cleanup(
+    retainDir: boolean = false,
+    collectCores: boolean = false,
+    notes?: string
+  ): Promise<string> {
     try {
-        await this.shutdownCluster();
+      await this.shutdownCluster();
     } catch (e) {
       debugLog(`cleanup: Error during shutdownCluster:`);
       debugLog(e);
@@ -1102,10 +1129,10 @@ export default class InstanceManager {
   private writeNotes(notes: string): void {
     try {
       const dir = this.runner.getRootDir();
-      const fn = path.join(dir, 'NOTES');
+      const fn = path.join(dir, "NOTES");
 
       fs.writeFileSync(fn, notes);
-    } catch(e) {
+    } catch (e) {
       console.error(`Failed writing NOTES: ${e}`);
     }
   }
@@ -1181,7 +1208,7 @@ export default class InstanceManager {
     instance.process!.kill("SIGKILL");
 
     // Need to convince TypeScript that status does not stay "KILLED" here.
-    while ((<Status>instance.status) !== "EXITED") {
+    while (<Status>instance.status !== "EXITED") {
       await sleep(50);
     }
   }
@@ -1235,11 +1262,14 @@ export default class InstanceManager {
         }
         // Send SIGABRT to produce a core dump.
         console.warn(
-          `Sending SIGABRT to ${instance.name} due to timeout `
-          + `during shutdown. PID is ${instance.process.pid}.`);
+          `Sending SIGABRT to ${instance.name} due to timeout ` +
+            `during shutdown. PID is ${instance.process.pid}.`
+        );
         instance.process.kill("SIGABRT");
         instance.status = "KILLED";
-        throw new Error(`Reached shutdown timeout, logfile is ${instance.logFile}`);
+        throw new Error(
+          `Reached shutdown timeout, logfile is ${instance.logFile}`
+        );
       }
 
       // wait a while and try again.
@@ -1270,13 +1300,11 @@ export default class InstanceManager {
           if (err.error !== "") {
             try {
               errObj = JSON.parse(err.error);
-            }
-            catch (e) {
+            } catch (e) {
               console.error(e, ` while parsing: ${err.error}`);
               throw e;
             }
-          }
-          else {
+          } else {
             errObj = {};
           }
         } else {
@@ -1285,11 +1313,11 @@ export default class InstanceManager {
         if (errObj.code === "ECONNREFUSED") {
           debugLog(
             "hmmm...server " +
-            instance.name +
-            " did not respond (" +
-            JSON.stringify(errObj) +
-            "). Assuming it is dead. Status is: " +
-            instance.status
+              instance.name +
+              " did not respond (" +
+              JSON.stringify(errObj) +
+              "). Assuming it is dead. Status is: " +
+              instance.status
           );
           expected = true;
         } else if (errObj.code === "ECONNRESET") {
@@ -1297,9 +1325,9 @@ export default class InstanceManager {
         } else if (err.statusCode === 503) {
           debugLog(
             "server " +
-            instance.name +
-            " answered 503. Assuming it is shutting down. Status is: " +
-            instance.status
+              instance.name +
+              " answered 503. Assuming it is shutting down. Status is: " +
+              instance.status
           );
           expected = true;
         } else if (errObj.errorNum === ERROR_SHUTTING_DOWN) {
@@ -1326,7 +1354,7 @@ export default class InstanceManager {
     if (this.instances.includes(instance)) {
       try {
         await this.shutdown(instance);
-      } catch(e) {
+      } catch (e) {
         debugLog(`destroy(${instance.name}): shutdown failed with ${e}.`);
         // Abort destroy when shutdown fails
         throw e;
@@ -1361,10 +1389,7 @@ export default class InstanceManager {
     await this.shutdownCluster();
     await Promise.all(this.agents().map(agent => this.restart(agent)));
     await Promise.all(this.dbServers().map(dbs => this.restart(dbs)));
-    await Promise.all(
-      this.coordinators()
-        .map(coord => this.restart(coord))
-    );
+    await Promise.all(this.coordinators().map(coord => this.restart(coord)));
     await this.waitForAllInstances();
   }
 
@@ -1378,8 +1403,7 @@ export default class InstanceManager {
       debugLog(`Created directory '${dirPath}'`);
     } catch (e) {
       if (e.errno === -EEXIST) {
-      }
-      else {
+      } else {
         throw e;
       }
     }
