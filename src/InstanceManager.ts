@@ -35,6 +35,8 @@ const shutdownWaitInterval = 50;
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
+const range = (num: number) => Array.from(Array(num).keys());
+
 // TODO this has more properties. Maybe use a class instead.
 interface HealthResponse {
   Endpoint: string;
@@ -566,7 +568,7 @@ export default class InstanceManager {
     await this.waitForInstances(this.agents());
     debugLog("all agents are booted");
 
-    const dbServers = Array.from(Array(numDbServers).keys()).map(index => {
+    const dbServers = range(numDbServers).map(index => {
       return this.startDbServer("dbServer-" + (index + 1));
     });
 
@@ -575,11 +577,9 @@ export default class InstanceManager {
     await this.waitForInstances(this.dbServers());
     debugLog("all DBServers are booted");
 
-    const coordinators = Array.from(Array(numCoordinators).keys()).map(
-      index => {
-        return this.startCoordinator("coordinator-" + (index + 1));
-      }
-    );
+    const coordinators = range(numCoordinators).map(index => {
+      return this.startCoordinator("coordinator-" + (index + 1));
+    });
     debugLog("booting Coordinators...");
     await Promise.all(coordinators);
     debugLog("all Coordinators are booted");
