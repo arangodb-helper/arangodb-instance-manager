@@ -173,12 +173,13 @@ export default class InstanceManager {
 
   async startSingleServer(
     nameIn: string,
-    num: number = 1
+    num: number = 1,
+    autoIp = false
   ): Promise<Instance[]> {
     const newInst = [];
     for (let i = 0; i < num; i++) {
       const name = `${nameIn}-${++this.singleServerCounter}`;
-      const ep = await this.runner.createEndpoint();
+      const ep = await this.runner.createEndpoint(autoIp);
       const inst = await this.startArango(name, ep, "single", [
         `--cluster.agency-endpoint=${this.getAgencyEndpoint()}`,
         `--cluster.my-role=SINGLE`,
@@ -191,9 +192,9 @@ export default class InstanceManager {
     return newInst;
   }
 
-  async startDbServer(name: string): Promise<Instance> {
+  async startDbServer(name: string, autoIp = false): Promise<Instance> {
     this.dbServerCounter++;
-    const endpoint = await this.runner.createEndpoint();
+    const endpoint = await this.runner.createEndpoint(autoIp);
     const args = [
       `--cluster.agency-endpoint=${this.getAgencyEndpoint()}`,
       `--cluster.my-role=PRIMARY`,
@@ -210,9 +211,9 @@ export default class InstanceManager {
     })[0].endpoint;
   }
 
-  async startCoordinator(name: string): Promise<Instance> {
+  async startCoordinator(name: string, autoIp = false): Promise<Instance> {
     this.coordinatorCounter++;
-    const endpoint = await this.runner.createEndpoint();
+    const endpoint = await this.runner.createEndpoint(autoIp);
     const args = [
       "--cluster.agency-endpoint=" + this.getAgencyEndpoint(),
       "--cluster.my-role=COORDINATOR",
@@ -269,7 +270,7 @@ export default class InstanceManager {
     return instance;
   }
 
-  async startAgency(options: any = {}): Promise<Instance[]> {
+  async startAgency(options: any = {}, autoIp = false): Promise<Instance[]> {
     debugLog("starting agencies");
     let size = options.agencySize || 1;
     if (options.agencyWaitForSync === undefined) {
@@ -287,7 +288,7 @@ export default class InstanceManager {
     let firstEndpoint = null;
     let instances = [];
     for (let i = 0; i < size; i++) {
-      const endpoint = await this.runner.createEndpoint();
+      const endpoint = await this.runner.createEndpoint(autoIp);
       if (firstEndpoint === null) {
         firstEndpoint = endpoint;
       }
@@ -1167,10 +1168,10 @@ export default class InstanceManager {
     return this.instances.filter(inst => inst.endpoint == url).shift();
   }
 
-  async assignNewEndpoint(instance: Instance): Promise<void> {
+  async assignNewEndpoint(instance: Instance, autoIp = false): Promise<void> {
     let endpoint: string;
     do {
-      endpoint = await this.runner.createEndpoint();
+      endpoint = await this.runner.createEndpoint(autoIp);
     } while (endpoint === instance.endpoint);
 
     ["server.endpoint", "agency.my-address", "cluster.my-address"].filter(

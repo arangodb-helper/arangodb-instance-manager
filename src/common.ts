@@ -73,10 +73,9 @@ export function portFromEndpoint(endpoint: string): string {
   return endpoint.match(/:(\d+)\/?/)![1];
 }
 
-export function createEndpoint(myIp = ip.address()): Promise<string> {
-  return findFreePort(myIp).then(port => {
-    return "tcp://" + myIp + ":" + port;
-  });
+export async function createEndpoint(myIp = ip.address()): Promise<string> {
+  const port = await findFreePort(myIp);
+  return `tcp://${myIp}:${port}`;
 }
 
 export const endpointToUrl = function(endpoint: string): string {
