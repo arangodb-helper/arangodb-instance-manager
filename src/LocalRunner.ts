@@ -30,8 +30,8 @@ export default class LocalRunner implements Runner {
     this.basePath = basePath;
   }
 
-  createEndpoint(autoIp = false) {
-    return createEndpoint(autoIp ? undefined : "127.0.0.1");
+  createEndpoint() {
+    return createEndpoint();
   }
 
   async firstStart(instance: Instance): Promise<Instance> {

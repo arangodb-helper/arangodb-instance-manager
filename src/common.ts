@@ -16,19 +16,17 @@ export function startInstance(instance: Instance): Promise<Instance> {
     try {
       const process = spawn(instance.binary!, instance.args);
 
-      process.stdout.on("data", data =>
-        data
-          .toString()
-          .split("\n")
-          .forEach(instance.logFn)
-      );
+      process.stdout.on("data", data => {
+        for (const line of data.toString().split("\n")) {
+          instance.logFn(line);
+        }
+      });
 
-      process.stderr.on("data", data =>
-        data
-          .toString()
-          .split("\n")
-          .forEach(instance.logFn)
-      );
+      process.stderr.on("data", data => {
+        for (const line of data.toString().split("\n")) {
+          instance.logFn(line);
+        }
+      });
 
       process.on("exit", code => {
         debugLog(`${instance.name} exited (${code})`);
@@ -73,7 +71,8 @@ export function portFromEndpoint(endpoint: string): string {
   return endpoint.match(/:(\d+)\/?/)![1];
 }
 
-export async function createEndpoint(myIp = ip.address()): Promise<string> {
+export async function createEndpoint(): Promise<string> {
+  const myIp = ip.address();
   const port = await findFreePort(myIp);
   return `tcp://${myIp}:${port}`;
 }
