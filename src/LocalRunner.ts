@@ -43,8 +43,10 @@ export default class LocalRunner implements Runner {
     const logFile = path.join(dir, "arangod.log");
     instance.logFile = logFile;
 
-    instance.args.unshift("--configuration=none");
-    if (this.basePath !== "1") {
+    if (this.basePath === "1") {
+      instance.args.push(`--server.uid=${process.getuid()}`);
+    } else {
+      instance.args.unshift("--configuration=none");
       instance.args.push(
         `--javascript.startup-directory=${path.join(this.basePath, "js")}`
       );
