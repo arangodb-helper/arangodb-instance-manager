@@ -1,6 +1,6 @@
 {
   "name": "arangodb-instance-manager",
-  "version": "1.1.4",
+  "version": "1.2.0",
   "author": "ArangoDB GmbH",
   "license": "Apache-2.0",
   "description": "Node server to manage ArangoDB instances",
