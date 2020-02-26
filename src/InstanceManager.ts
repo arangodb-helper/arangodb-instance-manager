@@ -80,9 +80,9 @@ export default class InstanceManager {
       this.runner = new LocalRunner(pathOrImage, instancesDirectory);
     } else if (runner === "docker") {
       // TODO The DockerRunner does have no concept of instance directories
-      this.runner = new DockerRunner(pathOrImage);
+      this.runner = new DockerRunner(pathOrImage, storageEngine);
     } else {
-      throw new Error("Unkown runner type");
+      throw new Error("Unknown runner type");
     }
 
     this.storageEngine = storageEngine;
@@ -568,18 +568,18 @@ export default class InstanceManager {
     await this.waitForInstances(this.agents());
     debugLog("all agents are booted");
 
-    const dbServers = range(numDbServers).map(index => {
-      return this.startDbServer("dbServer-" + (index + 1));
-    });
+    const dbServers = range(numDbServers).map(i =>
+      this.startDbServer(`dbServer-${i + 1}`)
+    );
 
     debugLog("booting DBServers...");
     await Promise.all(dbServers);
     await this.waitForInstances(this.dbServers());
     debugLog("all DBServers are booted");
 
-    const coordinators = range(numCoordinators).map(index => {
-      return this.startCoordinator("coordinator-" + (index + 1));
-    });
+    const coordinators = range(numCoordinators).map(i =>
+      this.startCoordinator(`coordinator-${i + 1}`)
+    );
     debugLog("booting Coordinators...");
     await Promise.all(coordinators);
     debugLog("all Coordinators are booted");
@@ -605,7 +605,7 @@ export default class InstanceManager {
         throw new Error(
           `Instance ${instance.name} is down!\nReal status ${
             instance.status
-          } with exitcode ${instance.exitcode}.${
+          } with exit code ${instance.exitcode}.${
             instance.logFile ? `\nSee logfile here ${instance.logFile}` : ""
           }`
         );
@@ -930,10 +930,9 @@ export default class InstanceManager {
   }
 
   private async waitForInstances(instances: Instance[]): Promise<Instance[]> {
-    const allWaiters = instances.map(instance =>
-      InstanceManager.waitForInstance(instance)
+    return await Promise.all(
+      instances.map(instance => InstanceManager.waitForInstance(instance))
     );
-    return await Promise.all(allWaiters);
   }
 
   private async addIdsToAllInstances(): Promise<void> {
@@ -1111,7 +1110,7 @@ export default class InstanceManager {
         // This is expected to happen if the DockerRunner is used with
         // collectCores, as it does not (yet) have a concept of an instance
         // directory.
-        console.error(`Instance ${instance.name} has no directory set! `);
+        console.error(`Instance ${instance.name} has no directory set!`);
         continue;
       }
       if (instance.process) {
@@ -1262,8 +1261,7 @@ export default class InstanceManager {
         }
         // Send SIGABRT to produce a core dump.
         console.warn(
-          `Sending SIGABRT to ${instance.name} due to timeout ` +
-            `during shutdown. PID is ${instance.process.pid}.`
+          `Sending SIGABRT to ${instance.name} due to timeout during shutdown. PID is ${instance.process.pid}.`
         );
         instance.process.kill("SIGABRT");
         instance.status = "KILLED";
@@ -1312,22 +1310,16 @@ export default class InstanceManager {
         }
         if (errObj.code === "ECONNREFUSED") {
           debugLog(
-            "hmmm...server " +
-              instance.name +
-              " did not respond (" +
-              JSON.stringify(errObj) +
-              "). Assuming it is dead. Status is: " +
-              instance.status
+            `Server ${instance.name} did not respond (${JSON.stringify(
+              errObj
+            )}). Assuming it is dead. Status is: ${instance.status}`
           );
           expected = true;
         } else if (errObj.code === "ECONNRESET") {
           expected = true;
         } else if (err.statusCode === 503) {
           debugLog(
-            "server " +
-              instance.name +
-              " answered 503. Assuming it is shutting down. Status is: " +
-              instance.status
+            `Server ${instance.name} answered 503. Assuming it is shutting down. Status is: ${instance.status}`
           );
           expected = true;
         } else if (errObj.errorNum === ERROR_SHUTTING_DOWN) {
@@ -1335,10 +1327,9 @@ export default class InstanceManager {
         }
         if (!expected) {
           console.error(
-            "An unexpected error occured during shutdown. Error code: ",
-            errObj.errorNum,
-            ", error type: ",
-            typeof err.error
+            `An unexpected error occurred during shutdown. Error code: ${
+              errObj.errorNum
+            }, error type: ${typeof err.error}`
           );
         }
       }
@@ -1373,7 +1364,7 @@ export default class InstanceManager {
     }
     debugLog(`Restarting ${instance.name}`);
     await this.runner.restart(instance);
-    return InstanceManager.waitForInstance(instance);
+    return await InstanceManager.waitForInstance(instance);
   }
 
   // this will append the logs to the test in case of a failure so
@@ -1402,8 +1393,7 @@ export default class InstanceManager {
       fs.mkdirSync(dirPath);
       debugLog(`Created directory '${dirPath}'`);
     } catch (e) {
-      if (e.errno === -EEXIST) {
-      } else {
+      if (e.errno !== -EEXIST) {
         throw e;
       }
     }

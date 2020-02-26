@@ -34,7 +34,7 @@ export default class LocalRunner implements Runner {
     return createEndpoint();
   }
 
-  firstStart(instance: Instance): Promise<Instance> {
+  async firstStart(instance: Instance): Promise<Instance> {
     this.assertRootDir();
     const dir = path.join(this.getRootDir(), instance.name);
     instance.dir = dir;
@@ -63,9 +63,10 @@ export default class LocalRunner implements Runner {
       instance.binary = arangod;
     }
 
-    return Promise.all([mkdirp(dataDir), mkdirp(appsDir)]).then(() => {
-      return startInstance(instance);
-    });
+    await mkdirp(dataDir);
+    await mkdirp(appsDir);
+
+    return await startInstance(instance);
   }
 
   async updateEndpoint(instance: Instance, endpoint: string): Promise<void> {

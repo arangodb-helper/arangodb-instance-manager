@@ -33,12 +33,14 @@ const asyncWhich = (cmd: string): Promise<string> =>
 export default class DockerRunner implements Runner {
   docker?: string;
   prefix: string;
+  storageEngine: "rocksdb" | "mmfiles";
   containerNames: string[];
   image: string;
 
-  constructor(image: string) {
+  constructor(image: string, storageEngine: "rocksdb" | "mmfiles" = "rocksdb") {
     var currentDate = new Date().valueOf().toString();
     var random = Math.random().toString();
+    this.storageEngine = storageEngine;
     this.prefix =
       "arango-" +
       crypto
@@ -69,13 +71,15 @@ export default class DockerRunner implements Runner {
     instance.binary = dockerBin;
     instance.args.push("--server.endpoint=tcp://0.0.0.0:8529");
     // instance.arangodArgs = instance.args.slice();
-    let dockerArgs = [
+    const dockerArgs = [
       "run",
       "-e",
       "ARANGO_NO_AUTH=1",
+      "-e",
+      `ARANGO_STORAGE_ENGINE=${this.storageEngine}`,
       "-p",
-      portFromEndpoint(instance.endpoint) + ":8529",
-      "--name=" + this.containerName(instance),
+      `${portFromEndpoint(instance.endpoint)}:8529`,
+      `--name=${this.containerName(instance)}`,
       this.image,
       "arangod"
     ];

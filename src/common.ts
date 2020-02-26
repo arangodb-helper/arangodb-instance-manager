@@ -3,6 +3,13 @@ import Instance from "./Instance";
 import portfinder = require("portfinder");
 import ip = require("ip");
 
+const debugLog = (...logLine: any[]) => {
+  if (process.env.LOG_IMMEDIATE && process.env.LOG_IMMEDIATE == "1") {
+    const [fmt, ...args] = logLine;
+    console.log(new Date().toISOString() + " " + fmt, ...args);
+  }
+};
+
 export function startInstance(instance: Instance): Promise<Instance> {
   instance.port = portFromEndpoint(instance.endpoint);
   return new Promise((resolve, reject) => {
@@ -24,6 +31,7 @@ export function startInstance(instance: Instance): Promise<Instance> {
       );
 
       process.on("exit", code => {
+        debugLog(`${instance.name} exited (${code})`);
         instance.status = "EXITED";
         instance.exitcode = code;
       });
@@ -65,9 +73,7 @@ export function portFromEndpoint(endpoint: string): string {
   return endpoint.match(/:(\d+)\/?/)![1];
 }
 
-export function createEndpoint(): Promise<string> {
-  let myIp = ip.address();
-
+export function createEndpoint(myIp = ip.address()): Promise<string> {
   return findFreePort(myIp).then(port => {
     return "tcp://" + myIp + ":" + port;
   });
