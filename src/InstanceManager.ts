@@ -67,7 +67,7 @@ export default class InstanceManager {
   constructor(
     pathOrImage: string = "../arangodb",
     runner: "local" | "docker" = "local",
-    storageEngine: "rocksdb" | "mmfiles" = "mmfiles"
+    storageEngine: "rocksdb" | "mmfiles" = "rocksdb"
   ) {
     this.instances = [];
     let instancesDirectory: string | undefined;
