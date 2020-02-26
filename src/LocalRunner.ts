@@ -44,17 +44,22 @@ export default class LocalRunner implements Runner {
     instance.logFile = logFile;
 
     instance.args.unshift("--configuration=none");
+    if (this.basePath !== "1") {
+      instance.args.push(
+        `--javascript.startup-directory=${path.join(this.basePath, "js")}`
+      );
+    }
     instance.args.push(
-      ...[
-        `--javascript.startup-directory=${path.join(this.basePath, "js")}`,
-        `--javascript.app-path=${appsDir}`,
-        `--server.endpoint=${instance.endpoint}`,
-        `--log.file=${logFile}`,
-        dataDir
-      ]
+      `--javascript.app-path=${appsDir}`,
+      `--server.endpoint=${instance.endpoint}`,
+      `--log.file=${logFile}`,
+      dataDir
     );
 
-    const arangod = path.join(this.basePath, "build", "bin", "arangod");
+    const arangod =
+      this.basePath === "1"
+        ? "arangod"
+        : path.join(this.basePath, "build", "bin", "arangod");
     if (process.env.RESILIENCE_ARANGO_WRAPPER) {
       let wrapper = process.env.RESILIENCE_ARANGO_WRAPPER.split(" ");
       instance.binary = wrapper.shift()!;
