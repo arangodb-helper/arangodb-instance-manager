@@ -14,6 +14,7 @@ export function startInstance(instance: Instance): Promise<Instance> {
   instance.port = portFromEndpoint(instance.endpoint);
   return new Promise((resolve, reject) => {
     try {
+      debugLog(instance.binary, ...instance.args);
       const process = spawn(instance.binary!, instance.args);
 
       process.stdout.on("data", data => {

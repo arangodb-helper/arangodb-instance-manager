@@ -920,10 +920,12 @@ export default class InstanceManager {
       // This is the cluster case: When we have DB Servers, we also have an
       // agency.
       // In this case, we wait for synchronous replication.
+      debugLog("Waiting for sync replication");
       await this.waitForSyncReplication();
     } else {
       // We have just an agency and/or single servers (possibly with active
       // failover).
+      debugLog("Waiting for agency");
       await this.waitForAgency();
     }
     return results;
