@@ -70,9 +70,11 @@ export default class LocalRunner implements Runner {
       instance.binary = arangod;
     }
 
+    debugLog(`Creating ${dataDir} ...`);
     await mkdirp(dataDir);
     await mkdirp(appsDir);
 
+    debugLog(`Starting instance ${instance.name}`);
     return await startInstance(instance);
   }
 

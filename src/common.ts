@@ -10,38 +10,34 @@ const debugLog = (...logLine: any[]) => {
   }
 };
 
-export function startInstance(instance: Instance): Promise<Instance> {
+export async function startInstance(instance: Instance): Promise<Instance> {
   instance.port = portFromEndpoint(instance.endpoint);
-  return new Promise((resolve, reject) => {
-    try {
-      debugLog(instance.binary, ...instance.args);
-      const process = spawn(instance.binary!, instance.args);
 
-      process.stdout.on("data", data => {
-        for (const line of data.toString().split("\n")) {
-          instance.logFn(line);
-        }
-      });
+  debugLog(instance.binary, ...instance.args);
+  const process = spawn(instance.binary!, instance.args);
 
-      process.stderr.on("data", data => {
-        for (const line of data.toString().split("\n")) {
-          instance.logFn(line);
-        }
-      });
-
-      process.on("exit", code => {
-        debugLog(`${instance.name} exited (${code})`);
-        instance.status = "EXITED";
-        instance.exitcode = code;
-      });
-      instance.exitcode = null;
-      instance.status = "RUNNING";
-      instance.process = process;
-      resolve(instance);
-    } catch (e) {
-      reject(e);
+  process.stdout.on("data", data => {
+    for (const line of data.toString().split("\n")) {
+      instance.logFn(line);
     }
   });
+
+  process.stderr.on("data", data => {
+    for (const line of data.toString().split("\n")) {
+      instance.logFn(line);
+    }
+  });
+
+  process.on("exit", code => {
+    debugLog(`${instance.name} exited (${code})`);
+    instance.status = "EXITED";
+    instance.exitcode = code;
+  });
+
+  instance.exitcode = null;
+  instance.status = "RUNNING";
+  instance.process = process;
+  return instance;
 }
 
 let startMinPort = 4000;

@@ -99,24 +99,22 @@ export default class DockerRunner implements Runner {
     await asyncExec(dockerBin, ["rm", "-fv", this.containerName(instance)]);
   }
 
-  cleanup(): Promise<void> {
-    return Promise.all(
-      this.containerNames.map(containerName => {
-        return this.locateDocker().then(dockerBin => {
-          return new Promise((resolve, reject) => {
-            exec(dockerBin + " rm -fv " + containerName, err => {
-              if (err) {
-                reject(err);
-              } else {
-                resolve();
-              }
-            });
+  async cleanup(): Promise<void> {
+    await Promise.all(
+      this.containerNames.map(async containerName => {
+        const dockerBin = await this.locateDocker();
+        return new Promise((resolve, reject) => {
+          exec(dockerBin + " rm -fv " + containerName, err => {
+            if (err) {
+              reject(err);
+            } else {
+              resolve();
+            }
           });
         });
       })
-    ).then(() => {
-      this.containerNames = [];
-    });
+    );
+    this.containerNames = [];
   }
 
   async updateEndpoint(instance: Instance, endpoint: string): Promise<void> {
